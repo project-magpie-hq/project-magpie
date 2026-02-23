@@ -1,6 +1,7 @@
 # 🪶 Project Magpie
 
 Project Magpie는 AI Harness 아키텍처 위에서 동작하는 LLM 자율 트레이딩 에이전트입니다.
+
 사용자의 자연어 요청을 구체적인 매매 전략으로 번역하고, 시장을 실시간으로 감시하며 자동 매매를 수행합니다.
 
 ## 🌲 Architecture
