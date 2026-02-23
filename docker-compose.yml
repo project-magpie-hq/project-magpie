@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # 1. MongoDB
+  the-nest:
+    image: mongo:latest
+    container_name: magpie-nest
+    ports:
+      - "27017:27017"
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - nest-data:/data/db
+    restart: always
+
+  # 2. Redis
+  hamster-wheel:
+    image: redis:alpine
+    container_name: magpie-hamster-wheel
+    ports:
+      - "6379:6379"
+    environment:
+      - TZ=Asia/Seoul
+    restart: always
+
+volumes:
+  nest-data:
