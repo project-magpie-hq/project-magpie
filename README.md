@@ -46,20 +46,7 @@ docker-compose up -d
 ```
 
 ### 4. 환경 변수 세팅
-프로젝트 루트 경로에 .env.example을 복사해서 .env 파일을 생성하고 아래 내용을 입력합니다.
-
-```
-# Database URLs
-MONGO_URL=mongodb://localhost:27017
-REDIS_URL=redis://localhost:6379
-
-# API Keys (각자 발급받은 키 입력)
-UPBIT_ACCESS_KEY=your_upbit_access_key
-UPBIT_SECRET_KEY=your_upbit_secret_key
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-GEMINI_API_KEY=your_gemini_api_token
-GROQ_API_KEY=your_groq_api_key
-```
+프로젝트 루트 경로에 .env.example을 복사해서 .env 파일을 생성하고 내용을 입력합니다.
 
 ---
 
