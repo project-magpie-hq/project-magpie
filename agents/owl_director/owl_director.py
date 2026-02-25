@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from tools.db_tools import register_strategy
+from tools.market_tools import request_chart_analysis
 
 
 def load_prompt():
@@ -19,7 +20,7 @@ def get_owl_llm():
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
 
     # 2. 도구(Tool) 바인딩
-    tools = [register_strategy]
+    tools = [register_strategy, request_chart_analysis]
     llm_with_tools = llm.bind_tools(tools)
 
     # 3. 프롬프트 설정
