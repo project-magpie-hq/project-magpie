@@ -1,3 +1,5 @@
+import asyncio
+
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
@@ -5,7 +7,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from agents.owl_director.owl_director import owl_node
 from state.magpie_state import MagpieState
-from tools.db_tools import register_strategy
+from tools.strategy_tools import get_my_active_strategy, register_strategy_to_nest
 
 load_dotenv()
 
@@ -13,16 +15,14 @@ load_dotenv()
 def build_graph():
     workflow = StateGraph(MagpieState)
 
-    # 2. 노드(Node) 추가
     # A. owl node
     workflow.add_node("owl_director", owl_node)
 
     # B. 도구 실행 노드
-    tools = [register_strategy]
+    tools = [get_my_active_strategy, register_strategy_to_nest]
     tool_node = ToolNode(tools)
     workflow.add_node("tools", tool_node)
 
-    # 3. 엣지(Edge) 연결 (흐름 제어)
     workflow.add_edge(START, "owl_director")
     workflow.add_conditional_edges("owl_director", tools_condition)
     workflow.add_edge("tools", "owl_director")
@@ -31,7 +31,7 @@ def build_graph():
     return workflow.compile(checkpointer=memory)
 
 
-if __name__ == "__main__":
+async def main_loop():
     app = build_graph()
     config = {"configurable": {"thread_id": "telegram_chat_001"}}
 
@@ -48,12 +48,16 @@ if __name__ == "__main__":
             print("👋 텔레그램 앱을 종료합니다.")
             break
 
-        inputs = {"messages": [("user", user_input)]}
+        inputs = {"messages": [("user", user_input)], "user_id": "test_developer_001"}
 
-        for event in app.stream(inputs, config=config, stream_mode="updates"):
+        async for event in app.astream(inputs, config=config, stream_mode="updates"):
             if "owl_director" in event:
                 ai_msg = event["owl_director"]["messages"][0]
 
                 # 도구 호출이 아닐 때만 텔레그램 메시지로 전송
                 if not ai_msg.tool_calls and ai_msg.content:
                     print(f"\n🦉 [Owl 봇]: {ai_msg.content}\n")
+
+
+if __name__ == "__main__":
+    asyncio.run(main_loop())
