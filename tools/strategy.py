@@ -3,12 +3,11 @@ import os
 
 from dotenv import load_dotenv
 from langchain_core.tools import tool
-from motor.motor_asyncio import AsyncIOMotorClient
+
+from db.connection import get_db
 
 load_dotenv()
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(MONGO_URL)
-db = client["the_nest"]
+db = get_db()
 strategies_collection = db["strategies"]
 
 
