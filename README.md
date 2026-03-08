@@ -1,52 +1,151 @@
 # 🪶 Project Magpie
 
-Project Magpie는 AI Harness 아키텍처 위에서 동작하는 LLM 자율 트레이딩 에이전트입니다.
+Project Magpie는 **LangGraph** 멀티 에이전트 아키텍처 기반의 가상자산 자동 매매 하네스(Harness)입니다.
 
-사용자의 자연어 요청을 구체적인 매매 전략으로 번역하고, 시장을 실시간으로 감시하며 자동 매매를 수행합니다.
+사용자의 자연어 요청을 구체적인 매매 전략으로 번역하고, 백테스트 및 실거래 환경에서 자동 매매를 수행합니다.
+
+---
+
+## 🏗️ 기술 스택
+
+| 구분 | 기술 |
+|------|------|
+| Python | 3.13, venv (`.venv/`) |
+| LLM | Groq Llama 3.3 70B (기본), Gemini 2.5 Flash 등 — `LLMModel` enum 관리 |
+| Agent Framework | LangGraph, LangChain |
+| DB | MongoDB (motor, async) |
+| 거래소 API | pyupbit (업비트 Open API) |
+| 데이터 모델 | Pydantic BaseModel (전역 통일) |
+
+---
 
 ## 🌲 Architecture
 
-* **🦉 Owl Director:** 사용자의 막연한 투자 전략을 구체적인 감시 룰(JSON)로 번역하고 텔레그램으로 소통합니다.
-* **🦇 Bat Daemon:** 업비트 WebSocket을 통해 1초 단위로 시장의 흐름을 낚아채고 룰과 대조합니다.
-* **🪹 The-Nest (MongoDB):** 전략 데이터와 누적된 매매 기록을 영구적으로 보관하는 안전한 둥지입니다.
-* **🐹 Hamster-wheel (Redis Alpine):** 엄청나게 빠른 속도로 부엉이와 박쥐 사이의 메시지(Queue)를 실어 나르는 초경량 인메모리 쳇바퀴입니다.
+### 에이전트
 
+* **🐿️ Meerkat Scanner:** 사용자의 매매 스타일과 종목을 입력받아 기술적 지표 기반 전략을 설계하고 MongoDB에 저장합니다.
+* **🦉 Owl Director:** Meerkat이 설계한 전략과 실시간 OHLCV 데이터를 기반으로 매 타임스텝 BUY/SELL/HOLD 의사결정을 수행합니다.
 
+### 인프라
 
-## 🚀 로컬 개발 환경 세팅 가이드
+* **🪹 The-Nest (MongoDB):** 전략, 매매 로그, 자산 스냅샷을 보관합니다.
+* **🐹 Hamster-wheel (Redis):** 에이전트 간 메시지 큐 (예정).
 
-팀원 간 원활한 협업을 위해 아래 순서대로 개발 환경을 세팅해 주세요.
+### 실행 모드
+
+`EngineConfig.mode` 파라미터 하나로 백테스트 ↔ 실거래 전환:
+
+```python
+from backtest.engine import EngineConfig
+from providers.base import ProviderMode
+
+config = EngineConfig(
+    symbol="KRW-BTC",
+    style="balanced",
+    user_prompt="비트코인 균형 매매",
+    mode=ProviderMode.BACKTEST,  # REAL로 바꾸면 실거래
+)
+```
+
+---
+
+## 📁 프로젝트 구조
+
+```
+project-magpie/
+├── main.py                 # Telegram 챗봇 모드
+├── backtest_main.py        # 백테스트 진입점
+├── live_main.py            # 실거래 진입점
+├── engine_factory.py       # 엔진 디스패치 팩토리
+│
+├── core/                   # 공용 모듈
+│   ├── constants.py        # FEE_RATE, INTERVAL_SECONDS
+│   ├── graph.py            # Meerkat 그래프 빌더, run_meerkat(), fetch_ohlcv()
+│   └── llm.py              # LLMModel enum, create_llm() 팩토리
+│
+├── db/                     # MongoDB
+│   ├── connection.py       # 공유 AsyncIOMotorClient (singleton)
+│   └── schemas.py          # 컬렉션 스키마, CollectionName(StrEnum)
+│
+├── providers/              # 자산 정보 추상화
+│   ├── base.py             # AssetProvider ABC, ProviderMode, BalanceInfo 등
+│   ├── mongo.py            # 백테스트: MongoDB 가상 잔고
+│   └── upbit.py            # 실거래: 업비트 API 실잔고 + 주문
+│
+├── state/                  # LangGraph State
+│   ├── agent.py            # AgentState (TypedDict)
+│   └── magpie.py           # MagpieState (Telegram 모드)
+│
+├── agents/
+│   ├── meerkat_scanner/
+│   │   ├── scanner.py      # Meerkat LangGraph 노드
+│   │   └── prompt.md
+│   └── owl_director/
+│       ├── decision.py     # owl_decide() — BUY/SELL/HOLD
+│       ├── director.py     # Telegram 모드 Owl 노드
+│       └── prompt.md
+│
+├── tools/                  # LangChain Tools
+│   ├── ohlcv.py            # get_ohlcv_tool (pyupbit)
+│   ├── db.py               # 전략 DB CRUD
+│   └── strategy.py         # Telegram 모드 전용
+│
+├── backtest/
+│   ├── engine.py           # BacktestEngine, EngineConfig
+│   └── reporter.py         # KPI 산출 (수익률, 승률, 샤프, MDD)
+│
+└── live/
+    └── engine.py           # LiveEngine (무한 루프 + 실주문)
+```
+
+---
+
+## 🚀 로컬 개발 환경 세팅
 
 ### 1. uv 설치
-본 프로젝트는 `uv`를 패키지 및 가상환경 관리 도구로 사용합니다.
 
-https://docs.astral.sh/uv/getting-started/installation/
+```bash
+# https://docs.astral.sh/uv/getting-started/installation/
+```
 
 ### 2. 패키지 설치
-
-종속성은 `pyproject.toml`로 관리되며, 아래 명령어 한 줄로 가상환경 생성과 패키지 설치가 동시에 완료됩니다.
 
 ```bash
 uv sync
 ```
 
 ### 3. 인프라 실행 (Docker Compose)
-The-Nest(MongoDB)와 Hamster-wheel(Redis)을 백그라운드에서 실행합니다.
 
 ```bash
 docker-compose up -d
-(종료 시: docker-compose down)
+# 종료: docker-compose down
 ```
 
-### 4. 환경 변수 세팅
-프로젝트 루트 경로에 .env.example을 복사해서 .env 파일을 생성하고 내용을 입력합니다.
+### 4. 환경 변수
 
+프로젝트 루트에 `.env` 파일 생성:
 
-## 🛠️ 실행 및 테스트 (VS Code)
-루트 디렉토리의 .vscode/launch.json에 디버깅 환경이 세팅되어 있습니다.
+```
+MONGO_URL=mongodb://localhost:27017
+GROQ_API_KEY=<your-groq-api-key>            # 기본 LLM (Groq 무료 티어)
+GOOGLE_API_KEY=<your-gemini-api-key>         # Gemini 모델 사용 시
+UPBIT_ACCESS_KEY=<your-upbit-access-key>     # 실거래 모드
+UPBIT_SECRET_KEY=<your-upbit-secret-key>     # 실거래 모드
+```
 
-VS Code 좌측의 Run and Debug 버튼 클릭
+---
 
-상단 드롭다운에서 🦉 Run Owl Director (main_test.py) 선택
+## 🛠️ 실행
 
-F5 키를 눌러 실행
+```bash
+# 백테스트
+uv run python backtest_main.py
+
+# 실거래
+uv run python live_main.py
+
+# Telegram 챗봇 모드
+uv run python main.py
+```
+
+상세 아키텍처 및 구현 가이드는 `development_guide.md` 참조.

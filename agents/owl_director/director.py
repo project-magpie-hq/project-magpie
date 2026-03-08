@@ -1,22 +1,22 @@
 import os
 
 from langchain_core.messages import SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-from tools.strategy_tools import get_my_active_strategy, register_strategy_to_nest
+from core.llm import LLMModel, create_llm
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 
 def load_prompt():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    prompt_path = os.path.join(current_dir, "owl_director_prompt.md")
+    prompt_path = os.path.join(current_dir, "prompt.md")
 
     with open(prompt_path, encoding="utf-8") as f:
         return f.read()
 
 
-def get_owl_llm():
+def get_owl_llm(model: LLMModel | None = None):
     # 1. 사용할 모델
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
+    llm = create_llm(model=model or LLMModel.LLAMA_33_70B, temperature=0.2)
 
     # 2. 도구(Tool) 바인딩
     tools = [register_strategy_to_nest, get_my_active_strategy]

@@ -5,9 +5,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from agents.owl_director.owl_director import owl_node
-from state.magpie_state import MagpieState
-from tools.strategy_tools import get_my_active_strategy, register_strategy_to_nest
+from agents.owl_director.director import owl_node
+from state.magpie import MagpieState
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 load_dotenv()
 
