@@ -15,9 +15,9 @@ from datetime import UTC, datetime
 from enum import Enum, StrEnum
 from typing import Any
 
-from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
+from pymongo.asynchronous.database import AsyncDatabase
 
 # ---------------------------------------------------------------------------
 # 헬퍼
@@ -269,7 +269,7 @@ class CollectionName(StrEnum):
 # 인덱스 초기화 유틸리티
 # ---------------------------------------------------------------------------
 
-async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
+async def ensure_indexes(db: AsyncDatabase) -> None:
     """애플리케이션 시작 시 한 번 호출하여 모든 컬렉션 인덱스를 생성한다."""
     await db[CollectionName.STRATEGIES].create_indexes(STRATEGY_INDEXES)
     await db[CollectionName.TRADE_LOGS].create_indexes(TRADE_LOG_INDEXES)

@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.asynchronous.database import AsyncDatabase
 
 from db.schemas import AssetStateDocument, CollectionName, Holding
 from providers.base import (AssetProvider, BalanceInfo, HoldingInfo,
@@ -45,11 +45,11 @@ class MongoAssetProvider(AssetProvider):
     session_id로 필터링한 도큐먼트 중 timestamp가 가장 최근인 것을 읽는다.
 
     Args:
-        db:         motor AsyncIOMotorDatabase 인스턴스.
+        db:         pymongo AsyncDatabase 인스턴스.
         session_id: 조회 대상 백테스트 세션 ID.
     """
 
-    def __init__(self, db: AsyncIOMotorDatabase, session_id: str) -> None:
+    def __init__(self, db: AsyncDatabase, session_id: str) -> None:
         self._db = db
         self._session_id = session_id
 
@@ -155,7 +155,7 @@ class MongoAssetProvider(AssetProvider):
     @classmethod
     async def initialize_session(
         cls,
-        db: AsyncIOMotorDatabase,
+        db: AsyncDatabase,
         session_id: str,
         initial_cash: float = 10_000.0,
         currency: str = "USDT",
@@ -166,7 +166,7 @@ class MongoAssetProvider(AssetProvider):
         백테스트 엔진의 시작 지점에서 한 번 호출한다.
 
         Args:
-            db:           motor AsyncIOMotorDatabase 인스턴스.
+            db:           pymongo AsyncDatabase 인스턴스.
             session_id:   신규 백테스트 세션 ID.
             initial_cash: 시뮬레이션 초기 자본. 기본값 10,000 USDT.
             currency:     현금 화폐 단위 (현재는 표기용).
