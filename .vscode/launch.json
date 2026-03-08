@@ -2,20 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Current File",
+      "name": "🦇 Bat Daemon",
       "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "${workspaceFolder}/bat_daemon.py",
       "console": "integratedTerminal",
+      "justMyCode": true,
       "envFile": "${workspaceFolder}/.env"
     },
     {
-      "name": "🦉 Run Owl Director (main.py)",
+      "name": "🦉 Magpie Director",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/main.py",
       "console": "integratedTerminal",
+      "justMyCode": true,
       "envFile": "${workspaceFolder}/.env"
-    },
+    }
   ]
 }
