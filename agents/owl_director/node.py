@@ -1,22 +1,23 @@
 import os
+from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
-from state.magpie_state import MagpieState
-from tools.strategy_tools import get_my_active_strategy, register_strategy_to_nest
+from state.magpie import MagpieState
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 
-def load_prompt():
+def load_prompt() -> str:
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    prompt_path = os.path.join(current_dir, "owl_director_prompt.md")
+    prompt_path = os.path.join(current_dir, "prompt.md")
 
     with open(prompt_path, encoding="utf-8") as f:
         return f.read()
 
 
-def get_owl_llm():
+def get_owl_llm() -> Any:
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
     tools = [register_strategy_to_nest, get_my_active_strategy]
     llm_with_tools = llm.bind_tools(tools)
@@ -24,7 +25,7 @@ def get_owl_llm():
     return llm_with_tools
 
 
-async def owl_node(state: MagpieState):
+async def owl_node(state: MagpieState) -> dict[str, Any]:
     print("\n🦉 [Owl]: 사용자의 요청을 분석하고 다음 행동을 결정합니다...")
     agent = get_owl_llm()
 
@@ -57,7 +58,7 @@ async def owl_node(state: MagpieState):
     return updates
 
 
-def route_after_owl(state: MagpieState):
+def route_after_owl(state: MagpieState) -> str:
     """Owl의 상태를 보고 다음 목적지를 결정하는 스마트 라우터"""
     messages = state.get("messages", [])
     if not messages:

@@ -1,19 +1,11 @@
 import datetime
-import os
 from typing import Annotated
 
-from dotenv import load_dotenv
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
-from motor.motor_asyncio import AsyncIOMotorClient
 
-from agents.owl_director.owl_schema import StrategySchema
-
-load_dotenv()
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-client = AsyncIOMotorClient(MONGO_URL)
-db = client["the_nest"]
-strategies_collection = db["strategies"]
+from agents.owl_director.schema import StrategySchema
+from db.mongo import strategies_collection
 
 
 @tool(args_schema=StrategySchema)

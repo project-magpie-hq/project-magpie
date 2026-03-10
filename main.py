@@ -5,11 +5,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from agents.meerkat_scanner.meerkat_scanner import meerkat_node
-from agents.owl_director.owl_director import owl_node, route_after_owl
-from state.magpie_state import MagpieState
-from tools.monitor_target_tools import register_monitoring_targets_to_nest
-from tools.strategy_tools import get_my_active_strategy, register_strategy_to_nest
+from agents.meerkat_scanner.node import meerkat_node
+from agents.owl_director.node import owl_node, route_after_owl
+from state.magpie import MagpieState
+from tools.monitor_target import register_monitoring_targets_to_nest
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 load_dotenv()
 
