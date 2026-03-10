@@ -1020,6 +1020,7 @@ dependencies = [
     { name = "pyupbit" },
     { name = "redis" },
     { name = "ta-lib" },
+    { name = "websockets" },
 ]
 
 [package.dev-dependencies]
@@ -1041,6 +1042,7 @@ requires-dist = [
     { name = "pyupbit", specifier = ">=0.2.34" },
     { name = "redis", specifier = ">=7.2.0" },
     { name = "ta-lib", specifier = ">=0.6.8" },
+    { name = "websockets", specifier = ">=15.0.1" },
 ]
 
 [package.metadata.requires-dev]
