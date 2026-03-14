@@ -1,6 +1,7 @@
 import asyncio
 
 import pandas as pd
+from data_loader import fetch_historical_candles
 
 
 class TimeMachineSimulator:
@@ -20,7 +21,7 @@ class TimeMachineSimulator:
 
         self.state_B = {
             "name": "B (비교군: 전략+타점 동시 갱신)",
-            "holdings_amount": {},
+            "holdings": {},
             "stats": {},
             "strategy": initial_strategy,
             "targets": {},
@@ -231,30 +232,23 @@ class TimeMachineSimulator:
 
 
 if __name__ == "__main__":
-    # TODO: Upbit API로 필요한 데이터 수집
-    dates = pd.date_range(start="2023-01-01", periods=120, freq="1h")
-    mock_btc = pd.DataFrame(
-        {
-            "open": [92000000] * 120,
-            "high": [106000000] * 120,
-            "low": [94000000] * 120,
-            "close": [105000000] * 120,
-            "volume": [150] * 120,
-        },
-        index=dates,
-    )
-    mock_eth = pd.DataFrame(
-        {
-            "open": [4200000] * 120,
-            "high": [4600000] * 120,
-            "low": [3700000] * 120,
-            "close": [3750000] * 120,
-            "volume": [800] * 120,
-        },
-        index=dates,
-    )
+    target_coins = ["KRW-BTC", "KRW-ETH"]
+    test_days = 30  # 최근 30일치(약 720시간) 데이터로 백테스트 진행
 
-    mock_data_map = {"KRW-BTC": mock_btc, "KRW-ETH": mock_eth}
+    print(f"📥 데이터 로딩 시작 (최근 {test_days}일)...")
+    mock_data_map = {}
+
+    for coin in target_coins:
+        print(f"   - {coin} 1시간 캔들 수집 중...")
+        df = fetch_historical_candles(coin, days=test_days)
+        if not df.empty:
+            mock_data_map[coin] = df
+            print(f"     ✅ {len(df)}개의 캔들 로드 완료 (시작: {df.index[0]}, 종료: {df.index[-1]})")
+        else:
+            print("     ❌ 데이터 로드 실패")
+
+    print("✅ 모든 데이터 로딩 완료!\n")
+    print(f"{mock_data_map}")
 
     initial_strategy = {"type": "기본 스윙"}
     simulator = TimeMachineSimulator(mock_data_map, initial_strategy)

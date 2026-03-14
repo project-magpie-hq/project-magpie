@@ -5,7 +5,7 @@
       "name": "🧪 Run: Time Machine Simulator",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/test/run_simulator.py",
+      "program": "${workspaceFolder}/simulator/run_simulator.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": false
