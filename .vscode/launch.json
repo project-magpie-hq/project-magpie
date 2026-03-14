@@ -2,13 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "🧪 Run: Time Machine Simulator",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/test/run_simulator.py",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false
+    },
+    {
       "name": "🦇 Bat Daemon",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/bat_daemon.py",
       "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env"
     },
     {
       "name": "🦉 Magpie Director",
@@ -16,8 +25,8 @@
       "request": "launch",
       "program": "${workspaceFolder}/main.py",
       "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
       "justMyCode": true,
-      "envFile": "${workspaceFolder}/.env"
     }
   ]
 }
