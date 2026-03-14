@@ -1,7 +1,8 @@
 import asyncio
+import os
 
 import pandas as pd
-from data_loader import fetch_historical_candles
+from data_loader import fetch_historical_candles_by_range
 
 
 class TimeMachineSimulator:
@@ -232,15 +233,40 @@ class TimeMachineSimulator:
 
 
 if __name__ == "__main__":
-    target_coins = ["KRW-BTC", "KRW-ETH"]
-    test_days = 30  # 최근 30일치(약 720시간) 데이터로 백테스트 진행
+    # 암호화폐 시장의 대표적인 3대 장세 기간 세팅 (실제 비트코인 히스토리 기준)
+    MARKET_PHASES = {
+        "BULL": {
+            "start": "2024-02-01 00:00:00",
+            "end": "2024-03-01 00:00:00",
+            "desc": "상승장 (한 달 만에 40% 폭등한 ETF 랠리 절정기)",
+        },
+        "BEAR": {
+            "start": "2022-11-01 00:00:00",
+            "end": "2022-12-01 00:00:00",
+            "desc": "하락장 (FTX 파산 사태로 인한 시장 붕괴기)",
+        },
+        "SIDEWAYS": {
+            "start": "2023-08-01 00:00:00",
+            "end": "2023-09-01 00:00:00",
+            "desc": "횡보장 (변동성이 역대 최저로 말라붙었던 지루한 박스권)",
+        },
+    }
 
-    print(f"📥 데이터 로딩 시작 (최근 {test_days}일)...")
+    # 환경 변수에서 현재 페이즈 읽기 (기본값은 SIDEWAYS)
+    current_phase_key = os.getenv("MARKET_PHASE", "SIDEWAYS")
+    phase_info = MARKET_PHASES[current_phase_key]
+
+    print("=" * 60)
+    print(f"🌍 시뮬레이터 환경: {current_phase_key} - {phase_info['desc']}")
+    print(f"📅 기간: {phase_info['start']} ~ {phase_info['end']}")
+    print("=" * 60)
+
+    target_coins = ["KRW-BTC", "KRW-ETH"]
     mock_data_map = {}
 
     for coin in target_coins:
         print(f"   - {coin} 1시간 캔들 수집 중...")
-        df = fetch_historical_candles(coin, days=test_days)
+        df = fetch_historical_candles_by_range(coin, phase_info["start"], phase_info["end"])
         if not df.empty:
             mock_data_map[coin] = df
             print(f"     ✅ {len(df)}개의 캔들 로드 완료 (시작: {df.index[0]}, 종료: {df.index[-1]})")

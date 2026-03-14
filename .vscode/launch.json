@@ -2,13 +2,40 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "🧪 Run: Time Machine Simulator",
+      "name": "📈 Run Simulator: BULL (상승장)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/simulator/run_simulator.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
-      "justMyCode": false
+      "env": {
+        "MARKET_PHASE": "BULL"
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "📉 Run Simulator: BEAR (하락장)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/simulator/run_simulator.py",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "MARKET_PHASE": "BEAR"
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "➖ Run Simulator: SIDEWAYS (횡보장)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/simulator/run_simulator.py",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "MARKET_PHASE": "SIDEWAYS"
+      },
+      "justMyCode": true
     },
     {
       "name": "🦇 Bat Daemon",
