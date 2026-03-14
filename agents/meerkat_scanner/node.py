@@ -35,16 +35,24 @@ async def meerkat_node(state: dict[str, Any]) -> dict[str, Any]:
         print("   ⚠️ [Meerkat]: 타겟 코인 정보가 없어 계산을 중단합니다.")
         return {"messages": []}
 
-    # 실시간 차트 데이터 분석 및 컨텍스트 생성
-    chart_context = generate_chart_context(target_coins)
+    sim_time = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
+    chart_context = await generate_chart_context(target_coins, sim_time)
+
     system_prompt = load_prompt()
 
+    feedback_data = state.get(
+        "meerkat_feedback", "최초 타점 계산이므로 이전 피드백이 없습니다. 차트 데이터만으로 최적의 타점을 산출하세요."
+    )
+
     user_input = f"""
-[Owl의 지시사항 (전략)]
+[Owl의 지시사항 (투자 전략)]
 {strategy.get("strategy_details", "전략 내용 없음")}
 
-[실시간 차트 컨텍스트]
+[실시간 차트 컨텍스트 (장/단기 요약)]
 {chart_context}
+
+[직전 타점 피드백 (Self-Correction 용도)]
+{feedback_data}
 """
 
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
@@ -52,7 +60,7 @@ async def meerkat_node(state: dict[str, Any]) -> dict[str, Any]:
     agent = get_meerkat_llm()
     response = await agent.ainvoke(messages)
 
-    print("✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
+    print("   ✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
 
     return {
         "messages": [response],
