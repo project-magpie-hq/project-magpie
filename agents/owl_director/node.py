@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
@@ -21,16 +21,29 @@ def load_prompt() -> str:
 def get_owl_llm() -> Any:
     """Owl 에이전트 모델 초기화 (모델명 유지)"""
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
-    tools = [register_strategy_to_nest, get_my_active_strategy]
+    # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
+    tools = [
+        register_strategy_to_nest,
+        get_my_active_strategy,
+    ]
     return llm.bind_tools(tools)
 
 
 async def owl_node(state: MagpieState) -> dict[str, Any]:
     """사용자 요청을 분석하고 도구 호출 또는 답변을 생성하는 노드"""
-    print("\n🦉 [Owl]: 사용자의 요청을 분석하고 있습니다...")
+    print("\n\n🦉 [Owl]: 사용자의 요청을 분석하고 있습니다...")
 
     system_prompt = load_prompt()
-    messages_to_llm = [SystemMessage(content=system_prompt)] + state["messages"]
+    # state에서 가장 최신 전략을 가져옴
+    current_strategy = state.get("owl_strategy")
+
+    injected_prompt = (
+        system_prompt
+        + f"\n\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
+        + "(※ 이 전략이 현재 유효하다면 별도의 도구 호출 없이 Meerkat에게 넘길 피드백만 작성하세요.)"
+    )
+
+    messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
     agent = get_owl_llm()
     response = await agent.ainvoke(messages_to_llm)
@@ -42,8 +55,13 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
         for tool_call in response.tool_calls:
             print(f"   🛠️ [Owl]: 도구 호출 결정 -> {tool_call['name']}")
             if tool_call["name"] == "register_strategy_to_nest":
-                # 전략 데이터를 상태에 미리 저장하여 Meerkat이 즉시 참조 가능하게 함
-                updates["owl_strategy"] = tool_call["args"]
+                # 도구 호출 인자로부터 새로운 전략 구조 생성
+                new_strat = {
+                    "target_coins": tool_call["args"].get("target_coins"),
+                    "strategy_details": tool_call["args"].get("strategy_details"),
+                }
+                updates["owl_strategy"] = new_strat
+                updates["is_strategy_updated"] = True
 
     return updates
 
@@ -56,20 +74,24 @@ def route_after_owl(state: MagpieState) -> str:
 
     last_msg = messages[-1]
 
-    # 1. LLM이 도구(Tool) 호출을 결정한 경우 (AIMessage with tool_calls)
+    # 1. 도구 호출이 있으면 무조건 도구 노드로 이동 (루프의 시작점)
     if getattr(last_msg, "tool_calls", None):
         return "owl_tools"
 
-    # 2. 메시지 내역을 역순으로 확인하여 '가장 최근에 실행된 도구'가 무엇인지 파악
+    # 2. 도구 호출이 없는 일반 텍스트 응답인 경우에만 시스템 이벤트/전략 갱신 여부 판단
+    is_system_event = False
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage):
-            if msg.name == "register_strategy_to_nest":
-                print("       🦉 [Owl]: 전략 등록이 완료되었습니다. Meerkat Scanner를 호출합니다.")
-                return "meerkat_scanner"
-            # 전략 등록이 아닌 다른 도구(전략 조회 등)라면 더 이상 추적하지 않고 종료
+        if msg.type in ["user", "human"]:
+            if "SYSTEM_EVENT" in msg.content:
+                is_system_event = True
             break
-        # 도구 실행 후 Owl이 이미 한 번 응답했다면, 그 응답이 최신이므로 루프를 통해 ToolMessage를 찾게 됨
-        # 만약 너무 오래전 대화라면(중간에 일반 AI 메시지가 너무 많으면) 중단할 수 있으나,
-        # 보통 Tool 실행 -> Owl 응답 -> Router 순이므로 break 없이 찾습니다.
+
+    if is_system_event:
+        print("   🦉 [Owl]: 분석 및 지시 완료. Meerkat으로 넘어갑니다 ➡️")
+        return "meerkat_scanner"
+
+    if state.get("is_strategy_updated"):
+        print("   🦉 [Owl]: 전략 갱신 완료. Meerkat으로 넘어갑니다 ➡️")
+        return "meerkat_scanner"
 
     return END

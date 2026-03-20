@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
 from agents.meerkat_scanner.chart_compressor import generate_chart_context
+from state.magpie import MagpieState
 from tools.monitor_target import register_monitoring_targets_to_nest
 
 
@@ -24,7 +25,7 @@ def get_meerkat_llm() -> Any:
     return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
 
 
-async def meerkat_node(state: dict[str, Any]) -> dict[str, Any]:
+async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     """차트 데이터를 분석하여 구체적인 타점을 계산하고 도구를 호출하는 노드"""
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
@@ -33,16 +34,15 @@ async def meerkat_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if not target_coins:
         print("   ⚠️ [Meerkat]: 타겟 코인 정보가 없어 계산을 중단합니다.")
-        return {"messages": []}
+        return {"messages": [], "is_strategy_updated": False}
 
     sim_time = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
     chart_context = await generate_chart_context(target_coins, sim_time)
 
     system_prompt = load_prompt()
 
-    feedback_data = state.get(
-        "meerkat_feedback", "최초 타점 계산이므로 이전 피드백이 없습니다. 차트 데이터만으로 최적의 타점을 산출하세요."
-    )
+    # Owl의 마지막 메시지(분석 결과 및 지시사항)를 피드백으로 사용
+    feedback_data = state["messages"][-1].content
 
     user_input = f"""
 [Owl의 지시사항 (투자 전략)]
@@ -64,4 +64,5 @@ async def meerkat_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "messages": [response],
+        "is_strategy_updated": False,  # 플래그 초기화
     }

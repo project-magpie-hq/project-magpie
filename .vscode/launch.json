@@ -5,11 +5,13 @@
       "name": "📈 Run Simulator: BULL (상승장)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/simulator/run_simulator.py",
+      "program": "${workspaceFolder}/simulator/run.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "env": {
-        "MARKET_PHASE": "BULL"
+        "IS_SIMULATION": "True",
+        "MARKET_PHASE": "BULL",
+        "PYTHONPATH": "${workspaceFolder}"
       },
       "justMyCode": true
     },
@@ -17,11 +19,13 @@
       "name": "📉 Run Simulator: BEAR (하락장)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/simulator/run_simulator.py",
+      "program": "${workspaceFolder}/simulator/run.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "env": {
-        "MARKET_PHASE": "BEAR"
+        "IS_SIMULATION": "True",
+        "MARKET_PHASE": "BEAR",
+        "PYTHONPATH": "${workspaceFolder}"
       },
       "justMyCode": true
     },
@@ -29,11 +33,13 @@
       "name": "➖ Run Simulator: SIDEWAYS (횡보장)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/simulator/run_simulator.py",
+      "program": "${workspaceFolder}/simulator/run.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "env": {
-        "MARKET_PHASE": "SIDEWAYS"
+        "IS_SIMULATION": "True",
+        "MARKET_PHASE": "SIDEWAYS",
+        "PYTHONPATH": "${workspaceFolder}"
       },
       "justMyCode": true
     },
@@ -50,9 +56,12 @@
       "name": "🦉 Magpie Director",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/main.py",
+      "program": "${workspaceFolder}/main/run.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
       "justMyCode": true,
     }
   ]

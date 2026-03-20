@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import Annotated
 
 from langchain_core.tools import tool
@@ -13,6 +14,11 @@ async def register_strategy_to_nest(
     target_coins: list, strategy_details: dict, state: Annotated[dict, InjectedState]
 ) -> str:
     """사용자가 전략을 최종 승인했을 때 호출하여, DB에 전략을 저장하거나 업데이트 합니다."""
+
+    if os.getenv("IS_SIMULATION") == "True":
+        print("✅ [시뮬레이션] 전략이 가상 메모리에 성공적으로 등록되었습니다. (DB 저장 생략)")
+        return "투자 전략 등록 및 업데이트가 성공적으로 완료되었습니다."
+
     filter_query = {"user_id": state.get("user_id")}
 
     update_query = {
