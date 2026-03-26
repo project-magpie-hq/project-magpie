@@ -14,6 +14,7 @@ async def register_monitoring_targets_to_nest(targets: list, state: Annotated[di
     """미어캣이 계산한 최종 타점 리스트를 DB(The-Nest)의 monitor_targets 컬렉션에 저장하여 Bat 데몬이 감시할 수 있도록 합니다."""
 
     if os.getenv("IS_SIMULATION") == "True":
+        print(targets)
         print("✅ [시뮬레이션] 타점이 가상 메모리에 성공적으로 등록되었습니다. (DB 저장 생략)")
         return "모든 타점 등록 및 업데이트가 성공적으로 완료되었습니다."
 

@@ -34,7 +34,6 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     print("\n\n🦉 [Owl]: 사용자의 요청을 분석하고 있습니다...")
 
     system_prompt = load_prompt()
-    # state에서 가장 최신 전략을 가져옴
     current_strategy = state.get("owl_strategy")
 
     injected_prompt = (
@@ -50,12 +49,10 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     updates = {"messages": [response]}
 
-    # 새로운 도구 호출 여부 확인 및 전략 데이터 상태 업데이트
     if response.tool_calls:
         for tool_call in response.tool_calls:
             print(f"   🛠️ [Owl]: 도구 호출 결정 -> {tool_call['name']}")
             if tool_call["name"] == "register_strategy_to_nest":
-                # 도구 호출 인자로부터 새로운 전략 구조 생성
                 new_strat = {
                     "target_coins": tool_call["args"].get("target_coins"),
                     "strategy_details": tool_call["args"].get("strategy_details"),
@@ -74,11 +71,9 @@ def route_after_owl(state: MagpieState) -> str:
 
     last_msg = messages[-1]
 
-    # 1. 도구 호출이 있으면 무조건 도구 노드로 이동 (루프의 시작점)
     if getattr(last_msg, "tool_calls", None):
         return "owl_tools"
 
-    # 2. 도구 호출이 없는 일반 텍스트 응답인 경우에만 시스템 이벤트/전략 갱신 여부 판단
     is_system_event = False
     for msg in reversed(messages):
         if msg.type in ["user", "human"]:

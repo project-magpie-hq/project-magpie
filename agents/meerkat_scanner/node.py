@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agents.meerkat_scanner.chart_compressor import generate_chart_context
 from state.magpie import MagpieState
@@ -20,7 +20,8 @@ def load_prompt() -> str:
 
 def get_meerkat_llm() -> Any:
     """Meerkat 에이전트 모델 초기화 (모델 유지)"""
-    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+    # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
     # Meerkat은 계산된 타점을 항상 저장해야 하므로 도구 호출을 강제함
     return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
 
@@ -61,6 +62,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     response = await agent.ainvoke(messages)
 
     print("   ✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
+    print(response)
 
     return {
         "messages": [response],
