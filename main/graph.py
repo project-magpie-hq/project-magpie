@@ -3,6 +3,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
+from agents.beaver_balancer.beaver_balancer import beaver_node
 from agents.meerkat_scanner.node import meerkat_node
 from agents.owl_director.node import owl_node, route_after_owl
 from state.magpie import MagpieState
@@ -12,11 +13,20 @@ from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 load_dotenv()
 
 
+def route_from_start(state: MagpieState) -> str:
+    if state.get("trigger_event"):
+        return "beaver_balancer"
+    return "owl_director"
+
+
 def build_graph():
     """Project Magpie의 전체 워크플로우 그래프 빌드"""
     workflow = StateGraph(MagpieState)
 
     # 1. 노드 정의
+    # Beaver Balancer: 시장 트리거 기반 포트폴리오 반영 제안서 생성
+    workflow.add_node("beaver_balancer", beaver_node)
+
     # Owl Director: 사용자 응대 및 전략 수립
     workflow.add_node("owl_director", owl_node)
     workflow.add_node("owl_tools", ToolNode([get_my_active_strategy, register_strategy_to_nest]))
@@ -26,7 +36,16 @@ def build_graph():
     workflow.add_node("meerkat_tools", ToolNode([register_monitoring_targets_to_nest]))
 
     # 2. 엣지 연결
-    workflow.add_edge(START, "owl_director")
+    workflow.add_conditional_edges(
+        START,
+        route_from_start,
+        {
+            "beaver_balancer": "beaver_balancer",
+            "owl_director": "owl_director",
+        },
+    )
+
+    workflow.add_edge("beaver_balancer", "owl_director")
 
     # Owl의 결과에 따른 조건부 분기 (도구 실행, 미어캣 호출, 또는 종료)
     workflow.add_conditional_edges(

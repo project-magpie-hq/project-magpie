@@ -36,7 +36,7 @@ class BatDaemon:
                         "min_volume": t.get("min_volume_threshold", 0),
                         "valid_for_n_candles": t.get("valid_for_n_candles", 24),
                         "state": t.get("status", "WAITING_BUY"),
-                        "created_at": t.get("created_at", datetime.now()),
+                        "created_at": t.get("created_at", datetime.datetime.now()),
                     }
 
                 if new_watching_coins != self.watching_coins:
@@ -145,7 +145,7 @@ class BatDaemon:
         if target["state"] != "WAITING_BUY":
             return
 
-        now = datetime.now()
+        now = datetime.datetime.now()
 
         # 1. 캔들 유효기간 만료 검사 (EXPIRED)
         hours_passed = (now - target["created_at"]).total_seconds() / 3600

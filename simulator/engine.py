@@ -18,6 +18,7 @@ class TimeMachineSimulator:
             "stats": {},
             "targets": {},
             "trade_history": [],
+            "available_cash_krw": 100_000_000.0,
         }
         self.magpie_graph = build_graph()
 
@@ -103,6 +104,7 @@ class TimeMachineSimulator:
         if sell_price:
             holdings = self.state["holdings"][coin]
             self.state["stats"][coin]["returned"] += sell_price * holdings
+            self.state["available_cash_krw"] += sell_price * holdings
             self.state["holdings"][coin] = 0
             target["state"] = "DONE"
             self.state["trade_history"].append(
@@ -127,12 +129,57 @@ class TimeMachineSimulator:
             buy_price = candle["close"]
 
         if buy_price:
+            if self.state["available_cash_krw"] < buy_price:
+                return False
             self.state["stats"][coin]["invested"] += buy_price
+            self.state["available_cash_krw"] -= buy_price
             self.state["holdings"][coin] = self.state["holdings"].get(coin, 0) + 1
             target["state"] = "HOLDING"
             self.state["trade_history"].append(f"[{current_time}] 🚀 매수 | {coin} | 1개 진입 체결: {buy_price:,.0f}원")
             return True
         return False
+
+    def _build_portfolio_snapshot(self, current_time) -> dict:
+        positions = []
+        invested_value = 0.0
+
+        for coin, quantity in self.state["holdings"].items():
+            if quantity <= 0:
+                continue
+            if coin not in self.data_map or current_time not in self.data_map[coin].index:
+                continue
+
+            current_price = float(self.data_map[coin].loc[current_time]["close"])
+            market_value = current_price * quantity
+            avg_entry_price = self.state["stats"].get(coin, {}).get("invested", 0.0) / max(quantity, 1)
+
+            invested_value += market_value
+            positions.append(
+                {
+                    "symbol": coin,
+                    "quantity": quantity,
+                    "avg_entry_price": avg_entry_price,
+                    "current_price": current_price,
+                    "market_value_krw": market_value,
+                }
+            )
+
+        available_cash = float(self.state["available_cash_krw"])
+        portfolio_value = available_cash + invested_value
+
+        return {
+            "source": "simulator",
+            "as_of": str(current_time),
+            "currency": "KRW",
+            "cash": {
+                "available_krw": available_cash,
+                "locked_krw": 0.0,
+                "total_krw": available_cash,
+            },
+            "positions": positions,
+            "portfolio_value_krw": portfolio_value,
+            "buy_available_krw": available_cash,
+        }
 
     async def _trigger_agents(self, current_time, reason: str):
         print(f"\n[{current_time}] {reason} ➡️ Agent 호출")
@@ -141,7 +188,9 @@ class TimeMachineSimulator:
         initial_state = {
             "user_id": "test_developer_001",
             "messages": [("user", user_message)],
+            "active_strategy": self.state["strategy"],
             "owl_strategy": self.state["strategy"],
+            "portfolio_snapshot": self._build_portfolio_snapshot(current_time),
             "current_sim_time": current_time,
         }
 
