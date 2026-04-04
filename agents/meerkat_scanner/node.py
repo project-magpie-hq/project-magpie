@@ -1,7 +1,9 @@
 import os
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agents.meerkat_scanner.chart_compressor import generate_chart_context
@@ -18,7 +20,7 @@ def load_prompt() -> str:
         return f.read()
 
 
-def get_meerkat_llm() -> Any:
+def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Meerkat 에이전트 모델 초기화 (모델 유지)"""
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
     # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)

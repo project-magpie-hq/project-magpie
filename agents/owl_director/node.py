@@ -2,7 +2,9 @@ import os
 from json import dumps
 from typing import Any
 
-from langchain_core.messages import SystemMessage
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
@@ -19,7 +21,7 @@ def load_prompt() -> str:
         return f.read()
 
 
-def get_owl_llm() -> Any:
+def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Owl 에이전트 모델 초기화 (모델명 유지)"""
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
     # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
@@ -96,7 +98,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
     agent = get_owl_llm()
-    response = await agent.ainvoke(messages_to_llm)
+    response: AIMessage = await agent.ainvoke(messages_to_llm)
 
     updates = {
         "messages": [response],

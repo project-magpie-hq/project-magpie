@@ -5,7 +5,7 @@ import pyupbit
 import talib
 
 
-async def generate_chart_context(target_coins: list[str], sim_time: str = None) -> str:
+async def generate_chart_context(target_coins: list[str], sim_time: str | None = None) -> str:
     """
     타겟 코인 리스트를 받아, 일봉(Macro)과 1시간봉(Micro) 데이터를 비동기로 분석하고
     LLM이 이해하기 쉬운 텍스트 리포트로 압축합니다.

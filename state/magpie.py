@@ -1,14 +1,15 @@
-from typing import Annotated, Any, TypedDict
+from typing import Any
 
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
+from langgraph.graph import MessagesState
 
 
-class MagpieState(TypedDict, total=False):
-    """Project Magpie의 전체 상태를 관리하는 객체"""
+class MagpieState(MessagesState):
+    """
+    Project Magpie의 전체 상태를 관리하는 객체
+    MessagesState를 통해 messages: Annotated[list[AnyMessage], add_messages] 상속
+    """
 
     user_id: str
-    messages: Annotated[list[BaseMessage], add_messages]
 
     # 에이전트가 실행될 특정 시점
     current_sim_time: str | None

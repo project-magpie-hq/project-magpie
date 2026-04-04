@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from agents.beaver_balancer.beaver_balancer import beaver_node
@@ -19,7 +20,7 @@ def route_from_start(state: MagpieState) -> str:
     return "owl_director"
 
 
-def build_graph():
+def build_graph() -> CompiledStateGraph:
     """Project Magpie의 전체 워크플로우 그래프 빌드"""
     workflow = StateGraph(MagpieState)
 

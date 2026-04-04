@@ -42,6 +42,13 @@ docker-compose up -d
 프로젝트 루트 경로에 .env.example을 복사해서 .env 파일을 생성하고 내용을 입력합니다.
 
 
+### 5. main 실행
+
+```bash
+uv run python -m main.run
+```
+
+
 ## 🛠️ 실행 및 테스트 (VS Code)
 루트 디렉토리의 .vscode/launch.json에 디버깅 환경이 세팅되어 있습니다.
 
