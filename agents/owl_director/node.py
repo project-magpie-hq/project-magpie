@@ -86,7 +86,11 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
         + f"\n[현재 트리거 이벤트]\n{dumps(trigger_event, ensure_ascii=False, indent=2, default=str)}\n"
         + f"\n[현재 포트폴리오 스냅샷]\n{dumps(portfolio_snapshot, ensure_ascii=False, indent=2, default=str)}\n"
         + f"\n[Beaver 제안서]\n{dumps(beaver_plan, ensure_ascii=False, indent=2, default=str)}\n"
-        + "(※ 이 전략이 현재 유효하다면 별도의 도구 호출 없이 Meerkat에게 넘길 피드백만 작성하세요.)"
+        + (
+            "(※ 자동화 모드에서는 Beaver 제안서를 1차 실행 초안으로 취급하세요. "
+            "명확한 충돌 사유가 없다면 유지하고, 조정이 필요하면 근거와 함께 축소/보류하세요. "
+            "최종 답변에는 Meerkat이 그대로 참고할 수 있도록 Beaver 반영 결과와 금액 중심 피드백을 반드시 포함하세요.)"
+        )
     )
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]

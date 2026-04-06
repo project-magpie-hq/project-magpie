@@ -12,7 +12,7 @@ class MagpieState(TypedDict, total=False):
 
     # 에이전트가 실행될 특정 시점
     current_sim_time: str | None
-    # Bat/외부 트리거가 전달한 구조화 이벤트
+    # Bat/외부 트리거가 전달한 구조화 이벤트 (monitoring target 구조 기반)
     trigger_event: dict[str, Any] | None
     # 현재 활성 전략 데이터(신규 표준 필드)
     active_strategy: dict[str, Any] | None
