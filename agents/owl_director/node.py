@@ -1,3 +1,4 @@
+import logging
 import os
 from json import dumps
 from typing import Any
@@ -7,29 +8,45 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
+from pydantic import BaseModel
 
 from state.magpie import MagpieState
 from tools.strategy import fetch_active_strategy_for_user, get_my_active_strategy, register_strategy_to_nest
+
+logger = logging.getLogger(__name__)
+
+
+class OwlStrategyUpdate(BaseModel):
+    """owl_node가 상태에 반영하는 전략 업데이트 데이터"""
+
+    target_coins: list[str]
+    strategy_details: dict[str, Any]
 
 
 def load_prompt() -> str:
     """에이전트 시스템 프롬프트 로드"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     prompt_path = os.path.join(current_dir, "prompt.md")
-
-    with open(prompt_path, encoding="utf-8") as f:
-        return f.read()
+    try:
+        with open(prompt_path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.error("Owl 프롬프트 파일을 찾을 수 없습니다: %s", prompt_path)
+        raise
+    except OSError as e:
+        logger.exception("Owl 프롬프트 파일 읽기 실패: %s", prompt_path)
+        raise RuntimeError(f"프롬프트 파일 읽기 실패: {prompt_path}") from e
 
 
 def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
-    """Owl 에이전트 모델 초기화 (모델명 유지)"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
-    # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
-    tools = [
-        register_strategy_to_nest,
-        get_my_active_strategy,
-    ]
-    return llm.bind_tools(tools)
+    """Owl 에이전트 모델 초기화"""
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+        tools = [register_strategy_to_nest, get_my_active_strategy]
+        return llm.bind_tools(tools)
+    except Exception as e:
+        logger.exception("Owl LLM 초기화 실패")
+        raise RuntimeError("Owl LLM 초기화 실패") from e
 
 
 def _format_content(content: Any) -> str:
@@ -97,12 +114,15 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
-    agent = get_owl_llm()
-    response: AIMessage = await agent.ainvoke(messages_to_llm)
+    try:
+        agent = get_owl_llm()
+        response: AIMessage = await agent.ainvoke(messages_to_llm)
+    except Exception as e:
+        logger.exception("Owl LLM 호출 실패")
+        raise RuntimeError("Owl 에이전트 실행 중 오류가 발생했습니다.") from e
 
     updates = {
         "messages": [response],
-        "active_strategy": current_strategy,
         "owl_strategy": current_strategy,
     }
 
@@ -110,12 +130,11 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
         for tool_call in response.tool_calls:
             print(f"   🛠️ [Owl]: 도구 호출 결정 -> {tool_call['name']}")
             if tool_call["name"] == "register_strategy_to_nest":
-                new_strat = {
-                    "target_coins": tool_call["args"].get("target_coins"),
-                    "strategy_details": tool_call["args"].get("strategy_details"),
-                }
-                updates["active_strategy"] = new_strat
-                updates["owl_strategy"] = new_strat
+                strategy_update = OwlStrategyUpdate(
+                    target_coins=tool_call["args"].get("target_coins", []),
+                    strategy_details=tool_call["args"].get("strategy_details", {}),
+                )
+                updates["owl_strategy"] = strategy_update.model_dump()
                 updates["is_strategy_updated"] = True
 
     updates["owl_decision"] = _build_owl_decision(response, {**state, **updates})
