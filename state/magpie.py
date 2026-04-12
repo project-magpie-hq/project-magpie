@@ -2,6 +2,8 @@ from typing import Any
 
 from langgraph.graph import MessagesState
 
+from agents.owl_director.schema import StrategySchema
+
 
 class MagpieState(MessagesState):
     """
@@ -26,7 +28,7 @@ class MagpieState(MessagesState):
     # 실제 체결/주문 결과(향후 execution tool 연동용)
     execution_result: dict[str, Any] | None
     # Owl이 결정한 전략 데이터(기존 호환 필드)
-    owl_strategy: dict | None
+    owl_strategy: StrategySchema | None
     # 전략 갱신 여부 플래그
     is_strategy_updated: bool | None
     # Meerkat이 계산한 타점 데이터

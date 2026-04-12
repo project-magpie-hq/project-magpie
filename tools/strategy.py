@@ -1,7 +1,8 @@
 import datetime
 import logging
 import os
-from typing import Annotated, Any
+from enum import StrEnum
+from typing import Annotated
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
@@ -11,7 +12,9 @@ from db.mongo import strategies_collection
 
 logger = logging.getLogger(__name__)
 
-STRATEGY_ACTIVE_STATE = "ACTIVE"
+
+class StrategyState(StrEnum):
+    ACTIVE = "ACTIVE"
 
 
 def normalize_strategy_doc(strategy: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -61,12 +64,12 @@ async def register_strategy_to_nest(
         "$set": {
             "target_coins": target_coins,
             "strategy_details": strategy_details,
-            "state": STRATEGY_ACTIVE_STATE,
-            "update_at": datetime.datetime.now(datetime.UTC),
-        },
-        "$setOnInsert": {
+            "state": StrategyState.ACTIVE.value,
             "created_at": datetime.datetime.now(datetime.UTC),
         },
+        # "$setOnInsert": {
+        #     "created_at": datetime.datetime.now(datetime.UTC),
+        # },
     }
 
     print("\n" + "⚙️ " * 15)
@@ -92,7 +95,7 @@ async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict 
     user_id: str | None = state.get("user_id")
 
     try:
-        strategy = await strategies_collection.find_one({"user_id": user_id, "state": STRATEGY_ACTIVE_STATE})
+        strategy = await strategies_collection.find_one({"user_id": user_id, "state": StrategyState.ACTIVE.value})
     except Exception as e:
         logger.exception("전략 DB 조회 실패 (user_id: %s)", user_id)
         raise RuntimeError("전략 조회 중 DB 오류가 발생했습니다.") from e

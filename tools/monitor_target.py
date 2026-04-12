@@ -1,19 +1,21 @@
 import datetime
 import logging
 import os
-from typing import Annotated
+from typing import Annotated, Any
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
-from agents.meerkat_scanner.schema import MonitoringTargetSchema
+from agents.meerkat_scanner.schema import MonitoringTargets, TargetSchema
 from db.mongo import monitoring_target_collection
 
 logger = logging.getLogger(__name__)
 
 
-@tool(args_schema=MonitoringTargetSchema)
-async def register_monitoring_targets_to_nest(targets: list, state: Annotated[dict, InjectedState]) -> str:
+@tool(args_schema=MonitoringTargets)
+async def register_monitoring_targets_to_nest(
+    targets: list[dict[str, Any]], state: Annotated[dict, InjectedState]
+) -> str:
     """미어캣이 계산한 최종 타점 리스트를 DB(The-Nest)의 monitor_targets 컬렉션에 저장하여 Bat 데몬이 감시할 수 있도록 합니다."""
 
     if os.getenv("IS_SIMULATION") == "True":
@@ -23,21 +25,24 @@ async def register_monitoring_targets_to_nest(targets: list, state: Annotated[di
 
     user_id: str | None = state.get("user_id")
 
-    for t in targets:
-        filter_query = {"user_id": user_id, "target_coin": t.target_coin}
+    for target in targets:
+        target_schema = TargetSchema.model_validate(target)
+        filter_query = {"user_id": user_id, "target_coin": target_schema.target_coin}
+        dumped_schema = target_schema.model_dump()
+        dumped_schema["created_at"] = datetime.datetime.now(datetime.UTC)
         update_query = {
-            "$set": t.model_dump(),
-            "$setOnInsert": {
-                "created_at": datetime.datetime.now(datetime.UTC),
-            },
+            "$set": dumped_schema,
+            # "$setOnInsert": {
+            #     "created_at": datetime.datetime.now(datetime.UTC),
+            # },
         }
 
         print("\n" + "⚙️ " * 15)
         try:
             result = await monitoring_target_collection.update_one(filter_query, update_query, upsert=True)
         except Exception as e:
-            logger.exception("타점 DB 저장 실패 (user_id: %s, coin: %s)", user_id, t.target_coin)
-            raise RuntimeError(f"{t.target_coin} 타점 저장 중 DB 오류가 발생했습니다.") from e
+            logger.exception("타점 DB 저장 실패 (user_id: %s, coin: %s)", user_id, target_schema.target_coin)
+            raise RuntimeError(f"{target_schema.target_coin} 타점 저장 중 DB 오류가 발생했습니다.") from e
 
         if result.upserted_id:
             print(f"🪹 [The Nest]: 새로운 타점이 DB에 등록되었습니다! ID: {result.upserted_id}")

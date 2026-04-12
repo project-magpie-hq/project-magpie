@@ -8,6 +8,7 @@ from typing import Any
 import websockets
 from pydantic import BaseModel
 
+from agents.meerkat_scanner.schema import TargetSchema
 from db.mongo import monitoring_target_collection as collection
 from main.graph import build_graph
 
@@ -28,23 +29,11 @@ class TargetStatus(StrEnum):
     EXPIRED = "EXPIRED"
 
 
-class TriggerBasis(StrEnum):
-    TOUCH = "TOUCH"
-    CLOSE = "CLOSE"
-
-
-class TargetData(BaseModel):
+class BatTargetSchema(BaseModel):
     """DB에서 읽어온 감시 타점 데이터"""
 
-    buy_upper: float
-    buy_lower: float
-    profit_price: float
-    loss_price: float
-    trigger_basis: TriggerBasis
-    requires_bullish: bool
-    min_volume: float
-    valid_for_n_candles: int
-    state: TargetStatus
+    target_schema: TargetSchema
+    status: TargetStatus
     created_at: datetime.datetime
 
 
@@ -66,22 +55,15 @@ class BatDaemon:
                 targets = await cursor.to_list(length=DB_TARGET_LIST_LIMIT)
 
                 new_watching_coins: set[str] = set()
-                for t in targets:
-                    coin: str = t["target_coin"]
-                    new_watching_coins.add(coin)
-
-                    self.active_targets[coin] = TargetData(
-                        buy_upper=t.get("buy_price_upper_limit", 0),
-                        buy_lower=t.get("buy_price_lower_limit", 0),
-                        profit_price=t.get("take_profit_price", 0),
-                        loss_price=t.get("stop_loss_price", 0),
-                        trigger_basis=t.get("trigger_basis", TriggerBasis.TOUCH),
-                        requires_bullish=t.get("requires_bullish_close", False),
-                        min_volume=t.get("min_volume_threshold", 0),
-                        valid_for_n_candles=t.get("valid_for_n_candles", 24),
-                        state=t.get("status", TargetStatus.WAITING_BUY),
-                        created_at=t.get("created_at", datetime.datetime.now(datetime.UTC)),
+                for target in targets:
+                    bat_target_schema = BatTargetSchema(
+                        target_schema=TargetSchema.model_validate(target),
+                        status=target.get("status", TargetStatus.WAITING_BUY),
+                        created_at=target.get("created_at", datetime.datetime.now(datetime.UTC)),
                     )
+                    new_watching_coins.add(bat_target_schema.target_schema.target_coin)
+
+                    self.active_targets[bat_target_schema.target_schema.target_coin] = bat_target_schema
 
                 if new_watching_coins != self.watching_coins:
                     print(
@@ -331,8 +313,8 @@ class BatDaemon:
             print(json.dumps(owl_decision, ensure_ascii=False, indent=2, default=str))
 
 
-async def main() -> None:
-    bat = BatDaemon()
+async def main(user_id: str) -> None:
+    bat = BatDaemon(user_id)
 
     print("=" * 60)
     print("🦇 Project Magpie: Bat 데몬 시작")
@@ -342,4 +324,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    user_id = "test_developer_001"
+    asyncio.run(main(user_id))

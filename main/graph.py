@@ -1,4 +1,5 @@
 import logging
+from enum import StrEnum
 
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
@@ -16,18 +17,19 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# 노드 이름 상수
-NODE_OWL_DIRECTOR = "owl_director"
-NODE_OWL_TOOLS = "owl_tools"
-NODE_MEERKAT_SCANNER = "meerkat_scanner"
-NODE_MEERKAT_TOOLS = "meerkat_tools"
-NODE_BEAVER_BALANCER = "beaver_balancer"
+
+class NodeNames(StrEnum):
+    OWL_DIRECTOR = "owl_director"
+    OWL_TOOLS = "owl_tools"
+    MEERKAT_SCANNER = "meerkat_scanner"
+    MEERKAT_TOOLS = "meerkat_tools"
+    NODE_BEAVER_BALANCER = "beaver_balancer"
 
 
 def route_from_start(state: MagpieState) -> str:
     if state.get("trigger_event"):
-        return NODE_BEAVER_BALANCER
-    return NODE_OWL_DIRECTOR
+        return NodeNames.NODE_BEAVER_BALANCER.value
+    return NodeNames.OWL_DIRECTOR.value
 
 
 def build_graph() -> CompiledStateGraph:
@@ -37,38 +39,42 @@ def build_graph() -> CompiledStateGraph:
 
         # 1. 노드 정의
         # Owl Director: 사용자 응대 및 전략 수립
-        workflow.add_node(NODE_OWL_DIRECTOR, owl_node)
-        workflow.add_node(NODE_OWL_TOOLS, ToolNode([get_my_active_strategy, register_strategy_to_nest]))
+        workflow.add_node(NodeNames.OWL_DIRECTOR.value, owl_node)
+        workflow.add_node(NodeNames.OWL_TOOLS.value, ToolNode([get_my_active_strategy, register_strategy_to_nest]))
 
         # Meerkat Scanner: 차트 분석 및 타점 계산
-        workflow.add_node(NODE_MEERKAT_SCANNER, meerkat_node)
-        workflow.add_node(NODE_MEERKAT_TOOLS, ToolNode([register_monitoring_targets_to_nest]))
+        workflow.add_node(NodeNames.MEERKAT_SCANNER.value, meerkat_node)
+        workflow.add_node(NodeNames.MEERKAT_TOOLS.value, ToolNode([register_monitoring_targets_to_nest]))
 
         # 2. 엣지 연결
         workflow.add_conditional_edges(
             START,
             route_from_start,
             {
-                NODE_BEAVER_BALANCER: NODE_BEAVER_BALANCER,
-                NODE_OWL_DIRECTOR: NODE_OWL_DIRECTOR,
+                NodeNames.NODE_BEAVER_BALANCER.value: NodeNames.NODE_BEAVER_BALANCER.value,
+                NodeNames.OWL_DIRECTOR.value: NodeNames.OWL_DIRECTOR.value,
             },
         )
 
-        workflow.add_edge(NODE_BEAVER_BALANCER, NODE_OWL_DIRECTOR)
+        workflow.add_edge(NodeNames.NODE_BEAVER_BALANCER.value, NodeNames.OWL_DIRECTOR.value)
 
         # Owl의 결과에 따른 조건부 분기 (도구 실행, 미어캣 호출, 또는 종료)
         workflow.add_conditional_edges(
-            NODE_OWL_DIRECTOR,
+            NodeNames.OWL_DIRECTOR.value,
             route_after_owl,
-            {NODE_OWL_TOOLS: NODE_OWL_TOOLS, NODE_MEERKAT_SCANNER: NODE_MEERKAT_SCANNER, END: END},
+            {
+                NodeNames.OWL_TOOLS.value: NodeNames.OWL_TOOLS.value,
+                NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
+                END: END,
+            },
         )
 
         # 도구 실행 후에는 다시 Owl에게 돌아가 결과를 보고하거나 다음 단계를 판단함
-        workflow.add_edge(NODE_OWL_TOOLS, NODE_OWL_DIRECTOR)
+        workflow.add_edge(NodeNames.OWL_TOOLS.value, NodeNames.OWL_DIRECTOR.value)
 
         # 미어캣 타점 계산 후에는 타점 등록 도구 실행
-        workflow.add_edge(NODE_MEERKAT_SCANNER, NODE_MEERKAT_TOOLS)
-        workflow.add_edge(NODE_MEERKAT_TOOLS, END)
+        workflow.add_edge(NodeNames.MEERKAT_SCANNER.value, NodeNames.MEERKAT_TOOLS.value)
+        workflow.add_edge(NodeNames.MEERKAT_TOOLS.value, END)
 
         memory = MemorySaver()
         return workflow.compile(checkpointer=memory)

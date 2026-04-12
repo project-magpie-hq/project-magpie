@@ -10,6 +10,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 from pydantic import BaseModel
 
+from agents.utils import normalize_content
 from state.magpie import MagpieState
 from tools.strategy import fetch_active_strategy_for_user, get_my_active_strategy, register_strategy_to_nest
 
@@ -116,7 +117,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     try:
         agent = get_owl_llm()
-        response: AIMessage = await agent.ainvoke(messages_to_llm)
+        response: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
     except Exception as e:
         logger.exception("Owl LLM 호출 실패")
         raise RuntimeError("Owl 에이전트 실행 중 오류가 발생했습니다.") from e

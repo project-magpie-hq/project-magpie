@@ -1,9 +1,14 @@
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class CoinTargetSchema(BaseModel):
+class TriggerBasis(StrEnum):
+    TOUCH = "TOUCH"
+    CLOSE = "CLOSE"
+
+
+class TargetSchema(BaseModel):
     target_coin: str = Field(
         description="투자할 타겟 코인 티커 (예: 'KRW-BTC', 'KRW-SOL'). 반드시 업비트 티커 형식으로 작성"
     )
@@ -20,17 +25,15 @@ class CoinTargetSchema(BaseModel):
     stop_loss_price: float = Field(description="손절 방어선")
 
     # [캔들 조건]
-    trigger_basis: Literal["TOUCH", "CLOSE"] = Field(
+    trigger_basis: TriggerBasis = Field(
         description="TOUCH는 꼬리 도달 시 즉시 체결, CLOSE는 1시간 캔들 종가 확정 시 체결"
     )
-    min_volume_threshold: float | None = Field(
-        description="신뢰할 수 있는 돌파/반등을 위한 최소 1시간 거래량 (필요 시 작성)"
-    )
+    min_volume_threshold: float = Field(description="신뢰할 수 있는 돌파/반등을 위한 최소 1시간 거래량")
     requires_bullish_close: bool = Field(description="매수 시, 해당 1시간 캔들이 양봉으로 마감해야만 진입할지 여부")
     valid_for_n_candles: int = Field(description="이 타점이 유효한 캔들 개수 (예: 24 = 24시간 뒤 폐기)")
 
     reason: str = Field(description="장기 추세와 최근 3일의 단기 흐름을 종합하여 이 타점을 도출한 근거 (100자 이내)")
 
 
-class MonitoringTargetSchema(BaseModel):
-    targets: list[CoinTargetSchema] = Field(description="계산된 각 코인별 타점 리스트")
+class MonitoringTargets(BaseModel):
+    targets: list[TargetSchema] = Field(description="계산된 각 코인별 타점 리스트")
