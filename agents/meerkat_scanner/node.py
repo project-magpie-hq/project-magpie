@@ -30,7 +30,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     """차트 데이터를 분석하여 구체적인 타점을 계산하고 도구를 호출하는 노드"""
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
-    strategy = state.get("owl_strategy")
+    strategy = state.get("active_strategy") or state.get("owl_strategy")
     target_coins = strategy.get("target_coins") if strategy else None
 
     if not target_coins:
@@ -43,7 +43,9 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     system_prompt = load_prompt()
 
     # Owl의 마지막 메시지(분석 결과 및 지시사항)를 피드백으로 사용
-    feedback_data = state["messages"][-1].content
+    feedback_data = state.get("owl_decision", {}).get("summary")
+    if not feedback_data:
+        feedback_data = state["messages"][-1].content
 
     user_input = f"""
 [Owl의 지시사항 (투자 전략)]

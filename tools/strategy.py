@@ -1,12 +1,42 @@
 import datetime
 import os
-from typing import Annotated
+from typing import Annotated, Any
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from agents.owl_director.schema import StrategySchema
 from db.mongo import strategies_collection
+
+
+def normalize_strategy_doc(strategy: dict[str, Any] | None) -> dict[str, Any] | None:
+    """서로 다른 전략 저장 포맷을 후속 노드에서 재사용 가능한 형태로 정규화한다."""
+    if not strategy:
+        return None
+
+    if "strategy_payload" in strategy:
+        payload = strategy.get("strategy_payload") or {}
+        target_market = (
+            payload.get("target_market")
+            or payload.get("target_coin")
+            or payload.get("symbol")
+            or (payload.get("trigger_spec") or {}).get("market")
+        )
+        target_coins = payload.get("target_coins") or ([target_market] if target_market else [])
+        return {
+            "target_coins": target_coins,
+            "strategy_details": payload,
+        }
+
+    return {
+        "target_coins": strategy.get("target_coins") or [],
+        "strategy_details": strategy.get("strategy_details") or {},
+    }
+
+
+async def fetch_active_strategy_for_user(user_id: str) -> dict[str, Any] | None:
+    strategy = await strategies_collection.find_one({"user_id": user_id, "state": "ACTIVE"})
+    return normalize_strategy_doc(strategy)
 
 
 @tool(args_schema=StrategySchema)
