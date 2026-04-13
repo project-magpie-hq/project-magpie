@@ -8,7 +8,7 @@ from typing import Any
 import websockets
 from pydantic import BaseModel
 
-from agents.meerkat_scanner.schema import TargetSchema
+from agents.meerkat_scanner.schema import TargetSchema, TriggerBasis
 from db.mongo import monitoring_target_collection as collection
 from main.graph import build_graph
 
@@ -40,7 +40,7 @@ class BatTargetSchema(BaseModel):
 class BatDaemon:
     def __init__(self, user_id: str) -> None:
         self.user_id = user_id
-        self.active_targets: dict[str, TargetData] = {}
+        self.active_targets: dict[str, BatTargetSchema] = {}
         self.watching_coins: set[str] = set()
         self.ws_connection: Any = None
         self.current_candles: dict[str, dict[str, Any]] = {}
@@ -121,104 +121,109 @@ class BatDaemon:
 
     async def _process_candle_tick(self, coin: str, tick: dict[str, Any]) -> None:
         """웹소켓으로 들어오는 실시간 캔들 조각을 받아 처리하는 메인 허브"""
-        targets = self.active_targets.get(coin) or []
-        if not targets:
+        target = self.active_targets.get(coin)
+        if not target:
             return
 
-        current_price = tick.get("trade_price")
+        current_price: float | None = tick.get("trade_price")
+        candle_time_str: str | None = tick.get("candle_date_time_kst")
+
         if current_price is None:
             return
 
-        candle_time_str = tick.get("candle_date_time_kst")
-        last_candle = self.current_candles.get(coin)
-        candle_closed = bool(last_candle and last_candle.get("candle_date_time_kst") != candle_time_str)
+        # 1. ⚡ [실시간 검사]: 매 틱마다 즉시 발동하는 로직 (익절/손절, TOUCH 매수)
+        await self._check_realtime_signals(coin, current_price, target)
 
-        if candle_closed and last_candle:
+        # 2. ⏳ [캔들 마감 검사]: 시간이 바뀌었는지 확인
+        last_candle = self.current_candles.get(coin)
+
+        if last_candle and last_candle.get("candle_date_time_kst") != candle_time_str:
             print(
                 f"\n⏰ [캔들 마감 감지]: {coin}의 {last_candle['candle_date_time_kst']} 캔들 마감. CLOSE 조건 판독 시작."
             )
+            await self._evaluate_closed_candle(coin, last_candle, target)
 
-        for target in targets:
-            await self._check_realtime_signals(coin, current_price, target)
-            if candle_closed and last_candle:
-                await self._evaluate_closed_candle(coin, last_candle, target)
-
+        # 3. 메모리 갱신: 방금 들어온 최신 캔들 상태로 덮어쓰기
         self.current_candles[coin] = tick
 
-    async def _check_realtime_signals(self, coin: str, current_price: float, target: dict[str, Any]):
+    async def _check_realtime_signals(self, coin: str, current_price: float, target: BatTargetSchema) -> None:
         """실시간(TOUCH) 조건 판별: 손절, 익절, TOUCH 방식의 매수"""
-        state = target["status"]
-
-        if state == "HOLDING":
-            if current_price >= target["take_profit_price"]:
+        if target.status == TargetStatus.HOLDING:
+            if current_price >= target.target_schema.take_profit_price:
                 print(f"💰 [PROFIT SIGNAL] {coin} 익절가 돌파! (현재가: {current_price:,.0f}원)")
-                target["status"] = "DONE"
-                await self._update_target_status(target, "DONE")
+                target.status = TargetStatus.DONE
+                await collection.update_one({"target_coin": coin}, {"$set": {"status": TargetStatus.DONE}})
                 self._schedule_graph_run(target, "SELL", current_price, "take_profit_hit")
-            elif current_price <= target["stop_loss_price"]:
+            elif current_price <= target.target_schema.stop_loss_price:
                 print(f"🩸 [STOP LOSS SIGNAL] {coin} 손절선 붕괴! 비상 탈출! (현재가: {current_price:,.0f}원)")
-                target["status"] = "DONE"
-                await self._update_target_status(target, "DONE")
+                target.status = TargetStatus.DONE
+                await collection.update_one({"target_coin": coin}, {"$set": {"status": TargetStatus.DONE}})
                 self._schedule_graph_run(target, "SELL", current_price, "stop_loss_hit")
 
         elif (
-            state == "WAITING_BUY"
-            and target["trigger_basis"] == "TOUCH"
-            and target["buy_price_lower_limit"] <= current_price <= target["buy_price_upper_limit"]
+            target.status == TargetStatus.WAITING_BUY
+            and target.target_schema.trigger_basis == TriggerBasis.TOUCH
+            and target.target_schema.buy_price_lower_limit
+            <= current_price
+            <= target.target_schema.buy_price_upper_limit
         ):
             print(f"🚀 [BUY SIGNAL - TOUCH] {coin} 매수 영역 진입! (현재가: {current_price:,.0f}원)")
-            target["status"] = "HOLDING"
-            await self._update_target_status(target, "HOLDING")
+            target.status = TargetStatus.HOLDING
+            await collection.update_one({"target_coin": coin}, {"$set": {"status": TargetStatus.HOLDING}})
             self._schedule_graph_run(target, "BUY", current_price, "touch_entry_hit")
 
-    async def _evaluate_closed_candle(self, coin: str, closed_candle: dict[str, Any], target: dict[str, Any]):
+    async def _evaluate_closed_candle(self, coin: str, closed_candle: dict[str, Any], target: BatTargetSchema):
         """방금 마감된 온전한 1시간 캔들을 기반으로 유효성 및 CLOSE 조건을 판별"""
-        if target["status"] != "WAITING_BUY":
+        if target.status != TargetStatus.WAITING_BUY:
             return
 
         now = datetime.datetime.now(datetime.UTC)
-        created_at = target.get("created_at") or now
-        if isinstance(created_at, datetime.datetime) and created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=datetime.UTC)
-
-        hours_passed = (now - created_at).total_seconds() / 3600
-        if hours_passed >= target["valid_for_n_candles"]:
-            print(f"   ⏳ [만료] {coin}: 설정된 타점 유효기간({target['valid_for_n_candles']}시간) 경과로 폐기.")
+        hours_passed = (now - target.created_at.replace(tzinfo=datetime.UTC)).total_seconds() / 3600
+        if hours_passed >= target.target_schema.valid_for_n_candles:
+            print(
+                f"   ⏳ [만료] {coin}: 설정된 타점 유효기간({target.target_schema.valid_for_n_candles}시간) 경과로 폐기."
+            )
             await self._update_target_status(target, "EXPIRED")
-            target["status"] = "EXPIRED"
+            target.status = TargetStatus.EXPIRED
             return
 
-        if target["trigger_basis"] != "CLOSE":
+        if target.target_schema.trigger_basis != TriggerBasis.CLOSE:
             return
 
-        close_price = closed_candle.get("trade_price")
-        open_price = closed_candle.get("opening_price")
-        volume = closed_candle.get("candle_acc_trade_volume")
+        close_price: float | None = closed_candle.get("trade_price")
+        open_price: float | None = closed_candle.get("opening_price")
+        volume: float | None = closed_candle.get("candle_acc_trade_volume")
+        if close_price is None or open_price is None or volume is None:
+            logger.warning("[%s] 마감 캔들 데이터 누락 (close/open/volume)", coin)
+            return
+
         is_bullish = close_price > open_price
 
-        if not (target["buy_price_lower_limit"] <= close_price <= target["buy_price_upper_limit"]):
+        if not (
+            target.target_schema.buy_price_lower_limit <= close_price <= target.target_schema.buy_price_upper_limit
+        ):
             return
 
-        if volume < target["min_volume_threshold"]:
+        if volume < target.target_schema.min_volume_threshold:
             print(f"   ⏸️ [조건 미달] {coin}: 1시간 거래량({volume:,.0f})이 최소 기준에 미달합니다.")
             return
 
-        if target["requires_bullish_close"] and not is_bullish:
+        if target.target_schema.requires_bullish_close and not is_bullish:
             print(f"   ⏸️ [조건 미달] {coin}: 캔들이 양봉으로 마감하지 않았습니다.")
             return
 
         print(f"🚀 [BUY SIGNAL - CLOSE] {coin} 1시간 캔들 마감 조건 완벽 충족! (종가: {close_price:,.0f}원)")
-        target["status"] = "HOLDING"
+        target.status = TargetStatus.HOLDING
         await self._update_target_status(target, "HOLDING")
         self._schedule_graph_run(target, "BUY", close_price, "close_entry_hit")
 
-    async def _update_target_status(self, target: dict[str, Any], new_status: str):
+    async def _update_target_status(self, target: BatTargetSchema, new_status: str):
         await collection.update_one(
-            {"user_id": target["user_id"], "target_coin": target["target_coin"]},
+            {"user_id": self.user_id, "target_coin": target.target_schema.target_coin},
             {"$set": {"status": new_status}},
         )
 
-    def _schedule_graph_run(self, target: dict[str, Any], signal_type: str, current_price: float, event_reason: str):
+    def _schedule_graph_run(self, target: BatTargetSchema, signal_type: str, current_price: float, event_reason: str):
         task = asyncio.create_task(self._invoke_graph_for_trigger(target, signal_type, current_price, event_reason))
         self.graph_tasks.add(task)
         task.add_done_callback(self._on_graph_task_done)
@@ -232,29 +237,29 @@ class BatDaemon:
 
     def _build_trigger_event(
         self,
-        target: dict[str, Any],
+        target: BatTargetSchema,
         signal_type: str,
         current_price: float,
         event_reason: str,
     ) -> dict[str, Any]:
         monitoring_target = {
-            "user_id": target.get("user_id"),
-            "target_coin": target.get("target_coin"),
-            "buy_price_upper_limit": target.get("buy_price_upper_limit"),
-            "buy_price_lower_limit": target.get("buy_price_lower_limit"),
-            "take_profit_price": target.get("take_profit_price"),
-            "stop_loss_price": target.get("stop_loss_price"),
-            "trigger_basis": target.get("trigger_basis"),
-            "requires_bullish_close": target.get("requires_bullish_close"),
-            "min_volume_threshold": target.get("min_volume_threshold"),
-            "valid_for_n_candles": target.get("valid_for_n_candles"),
-            "status": target.get("status"),
-            "created_at": target.get("created_at"),
+            "user_id": self.user_id,
+            "target_coin": target.target_schema.target_coin,
+            "buy_price_upper_limit": target.target_schema.buy_price_upper_limit,
+            "buy_price_lower_limit": target.target_schema.buy_price_lower_limit,
+            "take_profit_price": target.target_schema.take_profit_price,
+            "stop_loss_price": target.target_schema.stop_loss_price,
+            "trigger_basis": target.target_schema.trigger_basis,
+            "requires_bullish_close": target.target_schema.requires_bullish_close,
+            "min_volume_threshold": target.target_schema.min_volume_threshold,
+            "valid_for_n_candles": target.target_schema.valid_for_n_candles,
+            "status": target.status,
+            "created_at": target.created_at,
         }
 
         return {
             **monitoring_target,
-            "market": target.get("target_coin"),
+            "market": target.target_schema.target_coin,
             "signal_type": signal_type,
             "current_price": current_price,
             "event_reason": event_reason,
@@ -274,24 +279,24 @@ class BatDaemon:
 
     async def _invoke_graph_for_trigger(
         self,
-        target: dict[str, Any],
+        target: BatTargetSchema,
         signal_type: str,
         current_price: float,
         event_reason: str,
     ):
         trigger_event = self._build_trigger_event(target, signal_type, current_price, event_reason)
         thread_id = (
-            f"daemon:{target['user_id']}:{target['target_coin']}:{signal_type}:"
+            f"daemon:{self.user_id}:{target.target_schema.target_coin}:{signal_type}:"
             f"{datetime.datetime.now(datetime.UTC).strftime('%Y%m%dT%H%M%S')}"
         )
         inputs = {
-            "user_id": target["user_id"],
+            "user_id": self.user_id,
             "messages": [("user", self._build_system_event_message(trigger_event))],
             "trigger_event": trigger_event,
         }
 
         print(
-            f"   🤝 [Daemon->Graph]: {target['user_id']} / {target['target_coin']} / "
+            f"   🤝 [Daemon->Graph]: {self.user_id} / {target.target_schema.target_coin} / "
             f"{signal_type} 이벤트를 Beaver->Owl 그래프로 전달합니다."
         )
         result = await self.magpie_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
