@@ -57,3 +57,6 @@ VS Code 좌측의 Run and Debug 버튼 클릭
 상단 드롭다운에서 🦉 Run Owl Director (main_test.py) 선택
 
 F5 키를 눌러 실행
+
+- Streamlit dashboard
+    - `uv run streamlit run dashboard.py`
