@@ -1,33 +1,46 @@
+import logging
 import os
 from json import dumps
 from typing import Any
 
-from langchain_core.messages import SystemMessage
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
+from agents.owl_director.schema import StrategySchema
+from agents.utils import normalize_content
 from state.magpie import MagpieState
 from tools.strategy import fetch_active_strategy_for_user, get_my_active_strategy, register_strategy_to_nest
+
+logger = logging.getLogger(__name__)
 
 
 def load_prompt() -> str:
     """에이전트 시스템 프롬프트 로드"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     prompt_path = os.path.join(current_dir, "prompt.md")
+    try:
+        with open(prompt_path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.error("Owl 프롬프트 파일을 찾을 수 없습니다: %s", prompt_path)
+        raise
+    except OSError as e:
+        logger.exception("Owl 프롬프트 파일 읽기 실패: %s", prompt_path)
+        raise RuntimeError(f"프롬프트 파일 읽기 실패: {prompt_path}") from e
 
-    with open(prompt_path, encoding="utf-8") as f:
-        return f.read()
 
-
-def get_owl_llm() -> Any:
-    """Owl 에이전트 모델 초기화 (모델명 유지)"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2)
-    # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
-    tools = [
-        register_strategy_to_nest,
-        get_my_active_strategy,
-    ]
-    return llm.bind_tools(tools)
+def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
+    """Owl 에이전트 모델 초기화"""
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+        tools = [register_strategy_to_nest, get_my_active_strategy]
+        return llm.bind_tools(tools)
+    except Exception as e:
+        logger.exception("Owl LLM 초기화 실패")
+        raise RuntimeError("Owl LLM 초기화 실패") from e
 
 
 def _format_content(content: Any) -> str:
@@ -45,10 +58,10 @@ def _format_content(content: Any) -> str:
     return str(content)
 
 
-def _build_owl_decision(response: Any, state: MagpieState) -> dict[str, Any]:
+def build_owl_decision(response: Any, state: MagpieState) -> dict[str, Any]:
     tool_calls = getattr(response, "tool_calls", None) or []
     beaver_plan = state.get("beaver_plan")
-    next_step = "meerkat_scanner" if state.get("trigger_event") or _is_system_event(state) else "end"
+    next_step = "meerkat_scanner" if state.get("trigger_event") or is_system_event(state) else "end"
 
     return {
         "status": "pending_tool_execution" if tool_calls else "reviewed",
@@ -60,7 +73,7 @@ def _build_owl_decision(response: Any, state: MagpieState) -> dict[str, Any]:
     }
 
 
-def _is_system_event(state: MagpieState) -> bool:
+def is_system_event(state: MagpieState) -> bool:
     for msg in reversed(state.get("messages", [])):
         if msg.type in ["user", "human"] and "SYSTEM_EVENT" in msg.content:
             return True
@@ -72,7 +85,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     print("\n\n🦉 [Owl]: 사용자의 요청을 분석하고 있습니다...")
 
     system_prompt = load_prompt()
-    current_strategy = state.get("active_strategy") or state.get("owl_strategy")
+    current_strategy = state.get("owl_strategy")
     if not current_strategy:
         current_strategy = await fetch_active_strategy_for_user(state.get("user_id", "default_user"))
 
@@ -95,28 +108,27 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
-    agent = get_owl_llm()
-    response = await agent.ainvoke(messages_to_llm)
+    try:
+        agent = get_owl_llm()
+        response: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
+    except Exception as e:
+        logger.exception("Owl LLM 호출 실패")
+        raise RuntimeError("Owl 에이전트 실행 중 오류가 발생했습니다.") from e
 
-    updates = {
-        "messages": [response],
-        "active_strategy": current_strategy,
-        "owl_strategy": current_strategy,
-    }
+    updates: dict[str, Any] = {"messages": [response]}
 
     if response.tool_calls:
         for tool_call in response.tool_calls:
             print(f"   🛠️ [Owl]: 도구 호출 결정 -> {tool_call['name']}")
             if tool_call["name"] == "register_strategy_to_nest":
-                new_strat = {
-                    "target_coins": tool_call["args"].get("target_coins"),
-                    "strategy_details": tool_call["args"].get("strategy_details"),
-                }
-                updates["active_strategy"] = new_strat
-                updates["owl_strategy"] = new_strat
+                strategy_update = StrategySchema(
+                    target_coins=tool_call["args"].get("target_coins", []),
+                    strategy_details=tool_call["args"].get("strategy_details", {}),
+                )
+                updates["owl_strategy"] = strategy_update.model_dump()
                 updates["is_strategy_updated"] = True
 
-    updates["owl_decision"] = _build_owl_decision(response, {**state, **updates})
+    updates["owl_decision"] = build_owl_decision(response, {**state, **updates})
     return updates
 
 
@@ -131,7 +143,7 @@ def route_after_owl(state: MagpieState) -> str:
     if getattr(last_msg, "tool_calls", None):
         return "owl_tools"
 
-    if state.get("trigger_event") or _is_system_event(state):
+    if state.get("trigger_event") or is_system_event(state):
         print("   🦉 [Owl]: 분석 및 지시 완료. Meerkat으로 넘어갑니다 ➡️")
         return "meerkat_scanner"
 

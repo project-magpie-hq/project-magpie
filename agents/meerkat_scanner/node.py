@@ -1,55 +1,75 @@
+import logging
 import os
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agents.meerkat_scanner.chart_compressor import generate_chart_context
+from agents.owl_director.schema import StrategySchema
+from agents.utils import normalize_content
 from state.magpie import MagpieState
 from tools.monitor_target import register_monitoring_targets_to_nest
+
+logger = logging.getLogger(__name__)
 
 
 def load_prompt() -> str:
     """에이전트 시스템 프롬프트 로드"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     prompt_path = os.path.join(current_dir, "prompt.md")
+    try:
+        with open(prompt_path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        logger.error("Meerkat 프롬프트 파일을 찾을 수 없습니다: %s", prompt_path)
+        raise
+    except OSError as e:
+        logger.exception("Meerkat 프롬프트 파일 읽기 실패: %s", prompt_path)
+        raise RuntimeError(f"프롬프트 파일 읽기 실패: {prompt_path}") from e
 
-    with open(prompt_path, encoding="utf-8") as f:
-        return f.read()
 
-
-def get_meerkat_llm() -> Any:
-    """Meerkat 에이전트 모델 초기화 (모델 유지)"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-    # llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
-    # Meerkat은 계산된 타점을 항상 저장해야 하므로 도구 호출을 강제함
-    return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
+def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
+    """Meerkat 에이전트 모델 초기화"""
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+        # Meerkat은 계산된 타점을 항상 저장해야 하므로 도구 호출을 강제함
+        return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
+    except Exception as e:
+        logger.exception("Meerkat LLM 초기화 실패")
+        raise RuntimeError("Meerkat LLM 초기화 실패") from e
 
 
 async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     """차트 데이터를 분석하여 구체적인 타점을 계산하고 도구를 호출하는 노드"""
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
-    strategy = state.get("active_strategy") or state.get("owl_strategy")
-    target_coins = strategy.get("target_coins") if strategy else None
-
-    if not target_coins:
-        print("   ⚠️ [Meerkat]: 타겟 코인 정보가 없어 계산을 중단합니다.")
+    strategy_data = state.get("owl_strategy")
+    if strategy_data is None:
+        print("   ⚠️ [Meerkat]: 전략 정보가 없어 계산을 중단합니다.")
         return {"messages": [], "is_strategy_updated": False}
 
-    sim_time = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
-    chart_context = await generate_chart_context(target_coins, sim_time)
+    strategy = StrategySchema.model_validate(strategy_data)
+
+    sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
+
+    try:
+        chart_context = await generate_chart_context(strategy.target_coins, sim_time)
+    except Exception as e:
+        logger.exception("차트 컨텍스트 생성 실패: %s", strategy.target_coins)
+        raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
 
     system_prompt = load_prompt()
 
     # Owl의 마지막 메시지(분석 결과 및 지시사항)를 피드백으로 사용
-    feedback_data = state.get("owl_decision", {}).get("summary")
-    if not feedback_data:
-        feedback_data = state["messages"][-1].content
+    messages = state.get("messages", [])
+    feedback_data = messages[-1].content if messages else "이전 피드백 없음"
 
     user_input = f"""
 [Owl의 지시사항 (투자 전략)]
-{strategy.get("strategy_details", "전략 내용 없음")}
+{strategy.strategy_details}
 
 [실시간 차트 컨텍스트 (장/단기 요약)]
 {chart_context}
@@ -58,10 +78,14 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
 {feedback_data}
 """
 
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
+    llm_messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
 
-    agent = get_meerkat_llm()
-    response = await agent.ainvoke(messages)
+    try:
+        agent = get_meerkat_llm()
+        response: AIMessage = normalize_content(await agent.ainvoke(llm_messages))
+    except Exception as e:
+        logger.exception("Meerkat LLM 호출 실패")
+        raise RuntimeError("Meerkat 에이전트 실행 중 오류가 발생했습니다.") from e
 
     print("   ✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
     print(response)
