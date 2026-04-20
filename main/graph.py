@@ -28,8 +28,8 @@ class NodeNames(StrEnum):
 
 
 def route_from_start(state: MagpieState) -> str:
-    if state.get("trigger_event"):
-        return NodeNames.NODE_BEAVER_BALANCER.value
+    if state.get("from_daemon"):
+        return NodeNames.BEAVER_BALANCER.value
     return NodeNames.OWL_DIRECTOR.value
 
 

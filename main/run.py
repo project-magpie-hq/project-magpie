@@ -10,6 +10,7 @@ load_dotenv()
 async def main_loop():
     """사용자 인터렉션을 처리하는 메인 루프"""
     app = build_graph()
+    # TODO: 메신저 연동하면서 thread id 변경하기
     config = {"configurable": {"thread_id": "telegram_chat_001"}}
 
     print("\n" + "=" * 55)
@@ -27,7 +28,9 @@ async def main_loop():
                 print("👋 프로그램을 종료합니다.")
                 break
 
-            inputs = {"messages": [("user", user_input)], "user_id": "test_developer_001"}
+            # TODO: 메신저 연동하면서 user id 변경하기
+            user_id = "test_developer_001"
+            inputs = {"messages": [("user", user_input)], "user_id": user_id}
 
             # 그래프 실행 (업데이트 스트림 모드)
             async for event in app.astream(inputs, config=config, stream_mode="updates"):

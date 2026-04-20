@@ -13,6 +13,19 @@ from db.mongo import strategies_collection
 logger = logging.getLogger(__name__)
 
 
+# ## 도구 사용 제한 (Strict Rules)
+
+# 너에게는 강력한 도구들이 있지만, **남용은 시스템 리소스를 낭비하므로 아래 조건을 반드시 지켜.**
+
+# 1. **`get_my_active_strategy` (조회 도구):**
+#    - 메시지 컨텍스트에 `[현재 시스템에 적용된 매매 전략]` 또는 유사한 정보가 **이미 포함되어 있다면 절대 이 도구를 호출하지 마.**
+#    - 너는 이미 그 정보를 알고 있는 상태이므로, 제공된 텍스트를 바탕으로 즉시 분석에 착수해.
+
+# 2. **`register_strategy_to_nest` (등록/수정 도구):**
+#    - **전략의 내용(종목, 디테일 등)이 실제로 변경될 때만 호출해.**
+#    - 단순히 현재 전략을 유지하거나, 타점만 새로 잡으라고 Meerkat에게 지시할 때는 **절대 호출하지 마.**
+
+
 class StrategyState(StrEnum):
     ACTIVE = "ACTIVE"
 
