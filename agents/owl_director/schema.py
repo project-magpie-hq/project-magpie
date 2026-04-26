@@ -3,7 +3,6 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
-# discussion. DB에 들어갈 떄 created_at이나 user_id 같은게 들어가는데 DB 저장되는 스키마도 있으면 편할 듯? 구현은 어케할지 모르겠음
 class StrategySchema(BaseModel):
     target_coins: list[str] = Field(
         description="투자할 타겟 코인 티커 리스트 (예: ['KRW-BTC', 'KRW-SOL']). 반드시 1개 이상, 최대 5개까지만 지정해야 합니다.",
@@ -27,3 +26,6 @@ class StrategySchema(BaseModel):
             formatted_coins.append(clean_coin)
 
         return formatted_coins
+
+class OwlDirectorOutput(BaseModel):
+    

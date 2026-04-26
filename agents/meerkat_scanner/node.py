@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
@@ -9,49 +8,24 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from agents.meerkat_scanner.chart_compressor import generate_chart_context
 from agents.owl_director.schema import StrategySchema
-from agents.utils import normalize_content
+from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
 from tools.monitor_target import register_monitoring_targets_to_nest
 
 logger = logging.getLogger(__name__)
 
 
-def load_prompt() -> str:
-    """에이전트 시스템 프롬프트 로드"""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    prompt_path = os.path.join(current_dir, "prompt.md")
-    try:
-        with open(prompt_path, encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        logger.error("Meerkat 프롬프트 파일을 찾을 수 없습니다: %s", prompt_path)
-        raise
-    except OSError as e:
-        logger.exception("Meerkat 프롬프트 파일 읽기 실패: %s", prompt_path)
-        raise RuntimeError(f"프롬프트 파일 읽기 실패: {prompt_path}") from e
-
-
-def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
-    """Meerkat 에이전트 모델 초기화"""
-    try:
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        # Meerkat은 계산된 타점을 항상 저장해야 하므로 도구 호출을 강제함
-        return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
-    except Exception as e:
-        logger.exception("Meerkat LLM 초기화 실패")
-        raise RuntimeError("Meerkat LLM 초기화 실패") from e
-
-
 async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     """차트 데이터를 분석하여 구체적인 타점을 계산하고 도구를 호출하는 노드"""
+
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
-    strategy_data = state.get("owl_strategy")
-    if strategy_data is None:
+    current_strategy = state.get("current_strategy")
+    if current_strategy is None:
         print("   ⚠️ [Meerkat]: 전략 정보가 없어 계산을 중단합니다.")
         return {"messages": [], "is_strategy_updated": False}
 
-    strategy = StrategySchema.model_validate(strategy_data)
+    strategy = StrategySchema.model_validate(current_strategy)
 
     sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
 
@@ -68,15 +42,15 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     feedback_data = messages[-1].content if messages else "이전 피드백 없음"
 
     user_input = f"""
-[Owl의 지시사항 (투자 전략)]
-{strategy.strategy_details}
+        [Owl의 지시사항 (투자 전략)]
+        {strategy.strategy_details}
 
-[실시간 차트 컨텍스트 (장/단기 요약)]
-{chart_context}
+        [실시간 차트 컨텍스트 (장/단기 요약)]
+        {chart_context}
 
-[직전 타점 피드백 (Self-Correction 용도)]
-{feedback_data}
-"""
+        [직전 타점 피드백 (Self-Correction 용도)]
+        {feedback_data}
+    """
 
     llm_messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
 
@@ -88,9 +62,17 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
         raise RuntimeError("Meerkat 에이전트 실행 중 오류가 발생했습니다.") from e
 
     print("   ✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
-    print(response)
 
     return {
         "messages": [response],
-        "is_strategy_updated": False,  # 플래그 초기화
     }
+
+
+def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
+    """Meerkat 에이전트 모델 초기화"""
+    try:
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+        return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
+    except Exception as e:
+        logger.exception("Meerkat LLM 초기화 실패")
+        raise RuntimeError("Meerkat LLM 초기화 실패") from e

@@ -24,5 +24,4 @@
    - `trigger_basis`: 꼬리가 길고 휩소가 심한 장세라면 1시간 종가 마감을 확인하는 "CLOSE", 방향성이 확실하다면 즉시 체결하는 "TOUCH"로 설정.
    - `requires_bullish_close`: 눌림목 매수 시 안전을 위해 해당 캔들이 양봉(종가 > 시가)으로 마감할 때만 진입할지 여부(Boolean).
    - `min_volume_threshold`: 신뢰할 수 있는 반등/돌파를 위해 요구되는 최소 1시간 거래량 (최근 3시간 거래량을 참고하여 작성).
-   - `valid_for_n_candles`: 이 타점 논리가 유효한 시간(캔들 개수). (예: 24 = 24시간 뒤 폐기)
 6. **도구 호출:** - 계산이 모두 끝나면 **반드시 `register_monitoring_targets_to_nest` 도구를 호출**하여 산출된 각 코인별 정밀 타점 객체(JSON) 리스트를 저장해.

@@ -7,7 +7,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
-from agents.beaver_balancer import beaver_balancer
 from agents.meerkat_scanner.node import meerkat_node
 from agents.owl_director.node import owl_node, route_after_owl
 from state.magpie import MagpieState
@@ -24,13 +23,6 @@ class NodeNames(StrEnum):
     OWL_TOOLS = "owl_tools"
     MEERKAT_SCANNER = "meerkat_scanner"
     MEERKAT_TOOLS = "meerkat_tools"
-    BEAVER_BALANCER = "beaver_balancer"
-
-
-def route_from_start(state: MagpieState) -> str:
-    if state.get("trigger_event"):
-        return NodeNames.NODE_BEAVER_BALANCER.value
-    return NodeNames.OWL_DIRECTOR.value
 
 
 def build_graph() -> CompiledStateGraph:
@@ -47,20 +39,8 @@ def build_graph() -> CompiledStateGraph:
         workflow.add_node(NodeNames.MEERKAT_SCANNER.value, meerkat_node)
         workflow.add_node(NodeNames.MEERKAT_TOOLS.value, ToolNode([register_monitoring_targets_to_nest]))
 
-        # Beaver Balancer: 자산 분배
-        workflow.add_node(NodeNames.BEAVER_BALANCER.value, beaver_balancer.beaver_node)
-
         # 2. 엣지 연결
-        workflow.add_conditional_edges(
-            START,
-            route_from_start,
-            {
-                NodeNames.BEAVER_BALANCER.value: NodeNames.BEAVER_BALANCER.value,
-                NodeNames.OWL_DIRECTOR.value: NodeNames.OWL_DIRECTOR.value,
-            },
-        )
-
-        workflow.add_edge(NodeNames.BEAVER_BALANCER.value, NodeNames.OWL_DIRECTOR.value)
+        workflow.add_edge(START, NodeNames.OWL_DIRECTOR.value)
 
         # Owl의 결과에 따른 조건부 분기 (도구 실행, 미어캣 호출, 또는 종료)
         workflow.add_conditional_edges(
