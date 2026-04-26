@@ -1,46 +1,15 @@
 import datetime
 import logging
-import os
-from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated
 
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from agents.owl_director.schema import StrategySchema
+from db.entity import StrategyEntity
 from db.mongo import strategies_collection
 
 logger = logging.getLogger(__name__)
-
-
-def normalize_strategy_doc(strategy: dict[str, Any] | None) -> dict[str, Any] | None:
-    """서로 다른 전략 저장 포맷을 후속 노드에서 재사용 가능한 형태로 정규화한다."""
-    if not strategy:
-        return None
-
-    if "strategy_payload" in strategy:
-        payload = strategy.get("strategy_payload") or {}
-        target_market = (
-            payload.get("target_market")
-            or payload.get("target_coin")
-            or payload.get("symbol")
-            or (payload.get("trigger_spec") or {}).get("market")
-        )
-        target_coins = payload.get("target_coins") or ([target_market] if target_market else [])
-        return {
-            "target_coins": target_coins,
-            "strategy_details": payload,
-        }
-
-    return {
-        "target_coins": strategy.get("target_coins") or [],
-        "strategy_details": strategy.get("strategy_details") or {},
-    }
-
-
-async def fetch_active_strategy_for_user(user_id: str) -> dict[str, Any] | None:
-    strategy = await strategies_collection.find_one({"user_id": user_id, "state": "ACTIVE"})
-    return normalize_strategy_doc(strategy)
 
 
 @tool(args_schema=StrategySchema)
@@ -49,23 +18,21 @@ async def register_strategy_to_nest(
 ) -> str:
     """사용자가 전략을 최종 승인했을 때 호출하여, DB에 전략을 저장하거나 업데이트 합니다."""
 
-    if os.getenv("IS_SIMULATION") == "True":
+    if state.get("current_sim_time"):
         print("✅ [시뮬레이션] 전략이 가상 메모리에 성공적으로 등록되었습니다. (DB 저장 생략)")
         return "투자 전략 등록 및 업데이트가 성공적으로 완료되었습니다."
 
-    user_id: str | None = state.get("user_id")
-    filter_query = {"user_id": user_id}
+    user_id: str = state["user_id"]
+    strategy_entity = StrategyEntity.model_validate(
+        {"user_id": user_id, "target_coins": target_coins, "strategy_details": strategy_details}
+    )
+    filter_query = {"user_id": strategy_entity.user_id}
 
     update_query = {
-        "$set": {
-            "target_coins": target_coins,
-            "strategy_details": strategy_details,
-            "state": StrategyState.ACTIVE.value,
+        "$set": {strategy_entity.model_dump()},
+        "$setOnInsert": {
             "created_at": datetime.datetime.now(datetime.UTC),
         },
-        # "$setOnInsert": {
-        #     "created_at": datetime.datetime.now(datetime.UTC),
-        # },
     }
 
     print("\n" + "⚙️ " * 15)
@@ -91,7 +58,7 @@ async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict 
     user_id: str | None = state.get("user_id")
 
     try:
-        strategy = await strategies_collection.find_one({"user_id": user_id, "state": StrategyState.ACTIVE.value})
+        strategy = await strategies_collection.find_one({"user_id": user_id})
     except Exception as e:
         logger.exception("전략 DB 조회 실패 (user_id: %s)", user_id)
         raise RuntimeError("전략 조회 중 DB 오류가 발생했습니다.") from e
