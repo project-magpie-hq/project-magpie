@@ -34,14 +34,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
             logger.error(f"user id is not exist: {e}")
             raise e
 
-    beaver_plan = state.get("beaver_plan")
-
-    injected_prompt = (
-        system_prompt
-        + additional_prompt
-        + f"\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
-        + f"\n[Beaver 제안서]\n{beaver_plan}\n"
-    )
+    injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
