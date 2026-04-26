@@ -18,13 +18,13 @@ class MagpieState(MessagesState):
 
     user_id: str
     # Daemon으로부터 불렀는지, 사용자가 불렀는지 구분하는 플래그 변수
-    from_daemon: bool = False
+    from_daemon: bool
     # Owl이 다음 Agent를 누구를 부를지 결정하는 변수
-    next_agent: AgentEnum | None = None
+    next_agent: AgentEnum | None
     # 현재 사용 중인 전략
-    current_strategy: StrategySchema | None = None
+    current_strategy: StrategySchema | None
     # 에이전트가 실행될 특정 시점
-    current_sim_time: str | None = None
+    current_sim_time: str | None
 
     # 실제 체결/주문 결과(향후 execution tool 연동용)
-    execution_result: dict[str, Any] | None = None
+    execution_result: dict[str, Any] | None

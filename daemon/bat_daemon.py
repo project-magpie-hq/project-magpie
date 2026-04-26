@@ -7,7 +7,6 @@ from typing import Any
 import websockets
 
 from agents.meerkat_scanner.schema import TargetStatus, TriggerBasis
-from agents.utils import normalize_content
 from daemon.constant import (
     DB_SYNC_INTERVAL_SECONDS,
     DB_TARGET_LIST_LIMIT,
@@ -19,7 +18,6 @@ from daemon.constant import (
 from db.entity import TargetEntity
 from db.mongo import monitoring_target_collection as collection
 from main.graph import build_graph
-from state.magpie import MagpieState
 
 logger = logging.getLogger(__name__)
 
@@ -215,21 +213,22 @@ class BatDaemon:
 
         user_input = f"""
             Bat daemon detected a {signal_type} signal on {target_entity.target_coin} at approximately {current_price:,.0f} KRW.
+            event_reason: {event_reason}.
             Owl은 유지/축소/보류 여부를 명확히 판단한 뒤 Meerkat에게 금액 중심 피드백을 전달하세요.
         """
 
-        inputs = MagpieState(
-            user_id=self.user_id,
-            messages=[("user", user_input)],
-            from_daemon=True,
-        )
+        inputs = {
+            "user_id": user_id,
+            "messages": user_input,
+            "from_daemon": True,
+        }
 
         print(
             f"   🤝 [Daemon->Graph]: {self.user_id} / {target_entity.target_coin} / "
             f"{signal_type} 이벤트를 Beaver->Owl 그래프로 전달합니다."
         )
         result = await self.magpie_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
-        print(normalize_content(result))
+        print(result)
 
     async def _update_target_status(self, target_coin: str, new_status: TargetStatus):
         await collection.update_one(

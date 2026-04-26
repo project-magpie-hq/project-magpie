@@ -19,7 +19,13 @@ async def main_loop():
 
     while True:
         try:
-            user_input = input("👤 [나]: ").strip()
+            user_id = "test_developer_001"
+            terminal_input = input("👤 [나]: ").strip()
+            user_input = {
+                "user_id": user_id,
+                "messages": terminal_input,
+                "from_daemon": False,
+            }
 
             if not user_input:
                 continue
@@ -29,7 +35,6 @@ async def main_loop():
                 break
 
             # TODO: 메신저 연동하면서 user id 변경하기
-            user_id = "test_developer_001"
             inputs = {"messages": [("user", user_input)], "user_id": user_id}
 
             # 그래프 실행 (업데이트 스트림 모드)

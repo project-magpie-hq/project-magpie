@@ -9,8 +9,9 @@ from langgraph.graph import END
 
 from agents.owl_director.schema import StrategySchema
 from agents.utils import load_prompt, normalize_content
+from db.mongo import strategies_collection
 from state.magpie import MagpieState
-from tools.strategy import fetch_active_strategy_for_user, get_my_active_strategy, register_strategy_to_nest
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,12 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     current_strategy = state.get("current_strategy")
     if current_strategy is None:
         try:
-            current_strategy = await fetch_active_strategy_for_user(state["user_id"])
+            # TODO: 메소드 추출
+            current_strategy = await strategies_collection.find_one({"user_id": state.user_id})
             if current_strategy is None:
-                current_strategy = "현재 시스템에 적용된 매매 전략 없음"
+                raise Exception("Can not found Strategy for user id")
         except Exception as e:
-            logger.error(f"user id is not exist: {e}")
+            logger.error(f"user id is not found: {e}")
             raise e
 
     injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
@@ -81,8 +83,9 @@ def route_after_owl(state: MagpieState) -> str:
     if getattr(last_msg, "tool_calls", None):
         return "owl_tools"
 
-    if state.get("next_agent"):
-        print(f"   🦉 [Owl]: Sub Agent 호출 ➡️ {state.get('next_agent')}")
-        return state.get("next_agent")
+    next_agent = state.get("next_agent")
+    if next_agent:
+        print(f"   🦉 [Owl]: Sub Agent 호출 ➡️ {next_agent}")
+        return next_agent.value
 
     return END

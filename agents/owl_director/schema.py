@@ -26,3 +26,6 @@ class StrategySchema(BaseModel):
             formatted_coins.append(clean_coin)
 
         return formatted_coins
+
+class OwlDirectorOutput(BaseModel):
+    
