@@ -29,7 +29,7 @@ async def register_strategy_to_nest(
     filter_query = {"user_id": strategy_entity.user_id}
 
     update_query = {
-        "$set": {strategy_entity.model_dump()},
+        "$set": strategy_entity.model_dump(),
         "$setOnInsert": {
             "created_at": datetime.datetime.now(datetime.UTC),
         },

@@ -19,26 +19,24 @@ async def main_loop():
 
     while True:
         try:
+            # TODO: 메신저 연동하면서 user id 변경하기
             user_id = "test_developer_001"
             terminal_input = input("👤 [나]: ").strip()
-            user_input = {
-                "user_id": user_id,
-                "messages": terminal_input,
-                "from_daemon": False,
-            }
-
-            if not user_input:
+            if not terminal_input:
                 continue
 
-            if user_input.lower() in ["q", "quit", "exit"]:
+            if terminal_input.lower() in ["q", "quit", "exit"]:
                 print("👋 프로그램을 종료합니다.")
                 break
 
-            # TODO: 메신저 연동하면서 user id 변경하기
-            inputs = {"messages": [("user", user_input)], "user_id": user_id}
+            user_input = {
+                "user_id": user_id,
+                "messages": [("user", terminal_input)],
+                "from_daemon": False,
+            }
 
             # 그래프 실행 (업데이트 스트림 모드)
-            async for event in app.astream(inputs, config=config, stream_mode="updates"):
+            async for event in app.astream(user_input, config=config, stream_mode="updates"):
                 # Owl의 최종 응답 출력
                 if "owl_director" in event:
                     node_output = event["owl_director"]

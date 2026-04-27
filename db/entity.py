@@ -8,7 +8,7 @@ from agents.owl_director.schema import StrategySchema
 
 class BASE(BaseModel):
     user_id: str
-    updated_at: str = Field(default_factory=datetime.datetime.now(datetime.UTC))
+    updated_at: datetime.datetime = Field(default_factory=lambda: datetime.datetime.now(datetime.UTC))
 
 
 class StrategyEntity(StrategySchema, BASE): ...
