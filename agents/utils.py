@@ -1,3 +1,4 @@
+import inspect
 import logging
 import os
 
@@ -20,8 +21,14 @@ def normalize_content(response: AIMessage) -> AIMessage:
 
 def load_prompt(file_name: str = "prompt.md") -> str:
     """에이전트 시스템 프롬프트 로드"""
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    prompt_path = os.path.join(current_dir, file_name)
+    # 1. 호출 스택을 가져와서 이 함수를 호출한 이전 프레임([1])을 확인합니다.
+    caller_frame = inspect.stack()[1]
+    # 2. 호출한 파일의 경로를 추출합니다.
+    caller_filepath = caller_frame.filename
+    # 3. 만약 파일 경로가 없다면 현재 작업 디렉토리로 대체합니다.
+    caller_dir = os.getcwd() if caller_filepath == "<stdin>" else os.path.dirname(os.path.abspath(caller_filepath))
+
+    prompt_path = os.path.join(caller_dir, file_name)
     try:
         with open(prompt_path, encoding="utf-8") as f:
             return f.read()

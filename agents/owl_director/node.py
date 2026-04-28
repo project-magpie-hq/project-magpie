@@ -9,8 +9,8 @@ from langgraph.graph import END
 
 from agents.owl_director.schema import StrategySchema
 from agents.utils import load_prompt, normalize_content
-from db.mongo import strategies_collection
 from state.magpie import MagpieState
+from tools.router import transfer_to_agent
 from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 
 logger = logging.getLogger(__name__)
@@ -26,15 +26,6 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     )
 
     current_strategy = state.get("current_strategy")
-    if current_strategy is None:
-        try:
-            # TODO: 메소드 추출
-            current_strategy = await strategies_collection.find_one({"user_id": state.user_id})
-            if current_strategy is None:
-                raise Exception("Can not found Strategy for user id")
-        except Exception as e:
-            logger.error(f"user id is not found: {e}")
-            raise e
 
     injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
 
@@ -59,8 +50,6 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
                 )
                 updates["owl_strategy"] = strategy_update.model_dump()
 
-    # TODO: next agent 를 리턴하도록 Structure Output 지정
-    updates["next_agent"] = ""
     return updates
 
 
@@ -68,7 +57,7 @@ def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Owl 에이전트 모델 초기화"""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        tools = [register_strategy_to_nest, get_my_active_strategy]
+        tools = [register_strategy_to_nest, get_my_active_strategy, transfer_to_agent]
         return llm.bind_tools(tools)
     except Exception as e:
         logger.exception("Owl LLM 초기화 실패")
@@ -80,12 +69,15 @@ def route_after_owl(state: MagpieState) -> str:
     messages = state.get("messages", [])
     last_msg = messages[-1]
 
-    if getattr(last_msg, "tool_calls", None):
-        return "owl_tools"
+    tool_calls = getattr(last_msg, "tool_calls", None)
 
-    next_agent = state.get("next_agent")
-    if next_agent:
+    if not tool_calls:
+        return END
+
+    tool_call = tool_calls[0]
+    if tool_call["name"] == "transfer_to_agent":
+        next_agent = tool_call["args"]["next_agent"]
         print(f"   🦉 [Owl]: Sub Agent 호출 ➡️ {next_agent}")
-        return next_agent.value
+        return next_agent
 
-    return END
+    return "owl_tools"

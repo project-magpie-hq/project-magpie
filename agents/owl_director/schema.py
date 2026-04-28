@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -27,5 +28,13 @@ class StrategySchema(BaseModel):
 
         return formatted_coins
 
-class OwlDirectorOutput(BaseModel):
-    
+
+class AgentEnum(StrEnum):
+    MEERKAT = "meerkat_scanner"
+    END = "END"
+
+
+class RouterToolInput(BaseModel):
+    """다음 작업을 수행할 에이전트를 호출합니다."""
+
+    next_agent: AgentEnum = Field(description="호출할 다음 에이전트의 이름")
