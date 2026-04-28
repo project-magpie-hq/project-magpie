@@ -88,6 +88,13 @@ def render_tool_call(tool_call: ToolCall) -> None:
     # InjectedState는 내부 주입 파라미터이므로 표시 제외
     args: dict = {k: v for k, v in tool_call.get("args", {}).items() if k != "state"}
 
+    # 에이전트 이관 도구
+    if name == "transfer_to_agent":
+        next_agent = args.get("next_agent", "unknown")
+        with st.expander(f"🔀 Agent 이관 | `{name}` → `{next_agent}`", expanded=True):
+            st.info(f"제어권을 **{next_agent}** 에이전트로 이관합니다.")
+        return
+
     mongo = MONGO_TOOL_META.get(name)
 
     if mongo:
@@ -267,6 +274,7 @@ async def astream_and_render(user_input: str, config: dict) -> tuple[list[dict],
     inputs = {
         "messages": [("user", user_input)],
         "user_id": st.session_state.user_id,
+        "from_daemon": False,
     }
 
     collected: list[dict] = []
@@ -332,8 +340,9 @@ def main() -> None:
 
         st.markdown("**Tools**")
         st.markdown(
+            "- `transfer_to_agent` — 다른 에이전트로 제어권 이관\n"
             "- `get_my_active_strategy` — 활성 투자 전략 조회\n"
-            "- `register_strategy_to_nest` — 투자 전략 저장 (upsert)\n\n"
+            "- `register_strategy_to_nest` — 투자 전략 저장 (upsert)\n"
             "- `register_monitoring_targets_to_nest` — 감시 타점 리스트 저장 (upsert)"
         )
 
