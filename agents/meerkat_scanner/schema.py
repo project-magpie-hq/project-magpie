@@ -38,6 +38,7 @@ class TargetSchema(BaseModel):
         description="TOUCH는 꼬리 도달 시 즉시 체결, CLOSE는 1시간 캔들 종가 확정 시 체결"
     )
     min_volume_threshold: float = Field(description="신뢰할 수 있는 돌파/반등을 위한 최소 1시간 거래량")
+    valid_for_n_candles: int = Field(description="이 타점이 유효한 캔들 개수 (예: 24 = 24시간 뒤 폐기)")
     requires_bullish_close: bool = Field(description="매수 시, 해당 1시간 캔들이 양봉으로 마감해야만 진입할지 여부")
 
     reason: str = Field(description="장기 추세와 최근 3일의 단기 흐름을 종합하여 이 타점을 도출한 근거 (100자 이내)")
