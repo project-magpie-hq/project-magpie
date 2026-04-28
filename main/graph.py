@@ -1,5 +1,4 @@
 import logging
-from enum import StrEnum
 
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
@@ -7,8 +6,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
+from agents.constant import NodeNames
 from agents.meerkat_scanner.node import meerkat_node
-from agents.owl_director.node import owl_node, route_after_owl
+from agents.owl_director.node import owl_node, route_after_owl, route_after_owl_tools
 from state.magpie import MagpieState
 from tools.monitor_target import register_monitoring_targets_to_nest
 from tools.strategy import get_my_active_strategy, register_strategy_to_nest
@@ -16,13 +16,6 @@ from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-
-
-class NodeNames(StrEnum):
-    OWL_DIRECTOR = "owl_director"
-    OWL_TOOLS = "owl_tools"
-    MEERKAT_SCANNER = "meerkat_scanner"
-    MEERKAT_TOOLS = "meerkat_tools"
 
 
 def build_graph() -> CompiledStateGraph:
@@ -53,8 +46,15 @@ def build_graph() -> CompiledStateGraph:
             },
         )
 
-        # 도구 실행 후에는 다시 Owl에게 돌아가 결과를 보고하거나 다음 단계를 판단함
-        workflow.add_edge(NodeNames.OWL_TOOLS.value, NodeNames.OWL_DIRECTOR.value)
+        # 도구 실행 후: register_strategy_to_nest이면 meerkat_scanner로, 나머지는 owl_director로
+        workflow.add_conditional_edges(
+            NodeNames.OWL_TOOLS.value,
+            route_after_owl_tools,
+            {
+                NodeNames.OWL_DIRECTOR.value: NodeNames.OWL_DIRECTOR.value,
+                NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
+            },
+        )
 
         # 미어캣 타점 계산 후에는 타점 등록 도구 실행
         workflow.add_edge(NodeNames.MEERKAT_SCANNER.value, NodeNames.MEERKAT_TOOLS.value)
