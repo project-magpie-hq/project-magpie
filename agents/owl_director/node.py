@@ -86,10 +86,11 @@ def route_after_owl(state: MagpieState) -> str:
 
 def route_after_owl_tools(state: MagpieState) -> str:
     """owl_tools 실행 후 라우팅: register_strategy_to_nest 실행 시 meerkat_scanner로 자동 이동"""
-    for msg in reversed(state.get("messages", [])):
-        if isinstance(msg, AIMessage) and msg.tool_calls:
-            if any(tc["name"] == "register_strategy_to_nest" for tc in msg.tool_calls):
-                print("   🦉 [Owl Tools]: 전략 등록 완료 → Meerkat Scanner 자동 호출")
-                return NodeNames.MEERKAT_SCANNER.value
-            return NodeNames.OWL_DIRECTOR.value
+    messages = state.get("messages", [])
+    last_msg = messages[-1]
+
+    if getattr(last_msg, "name", None) == "register_strategy_to_nest":
+        print("   🦉 [Owl Tools]: 전략 등록 완료 → Meerkat Scanner 자동 호출")
+        return NodeNames.MEERKAT_SCANNER.value
+
     return NodeNames.OWL_DIRECTOR.value
