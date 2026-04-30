@@ -7,6 +7,7 @@ from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
+from agents.constant import NodeNames
 from agents.owl_director.schema import StrategySchema
 from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
@@ -48,7 +49,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
                     target_coins=tool_call["args"].get("target_coins", []),
                     strategy_details=tool_call["args"].get("strategy_details", {}),
                 )
-                updates["owl_strategy"] = strategy_update.model_dump()
+                updates["current_strategy"] = strategy_update.model_dump()
 
     return updates
 
@@ -80,4 +81,16 @@ def route_after_owl(state: MagpieState) -> str:
         print(f"   🦉 [Owl]: Sub Agent 호출 ➡️ {next_agent}")
         return next_agent
 
-    return "owl_tools"
+    return NodeNames.OWL_TOOLS.value
+
+
+def route_after_owl_tools(state: MagpieState) -> str:
+    """owl_tools 실행 후 라우팅: register_strategy_to_nest 실행 시 meerkat_scanner로 자동 이동"""
+    messages = state.get("messages", [])
+    last_msg = messages[-1]
+
+    if getattr(last_msg, "name", None) == "register_strategy_to_nest":
+        print("   🦉 [Owl Tools]: 전략 등록 완료 → Meerkat Scanner 자동 호출")
+        return NodeNames.MEERKAT_SCANNER.value
+
+    return NodeNames.OWL_DIRECTOR.value

@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -23,7 +23,18 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     current_strategy = state.get("current_strategy")
     if current_strategy is None:
         print("   ⚠️ [Meerkat]: 전략 정보가 없어 계산을 중단합니다.")
-        return {"messages": [], "is_strategy_updated": False}
+        # transfer_to_agent 호출에 대한 ToolMessage를 합성해야 meerkat_tools가 해당 tool_call을 실행하지 않음
+        for msg in reversed(state.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc["name"] == "transfer_to_agent":
+                        return {
+                            "messages": [
+                                ToolMessage(content="전략 정보가 없어 분석을 중단합니다.", tool_call_id=tc["id"])
+                            ]
+                        }
+                break
+        return {"messages": []}
 
     strategy = StrategySchema.model_validate(current_strategy)
 
