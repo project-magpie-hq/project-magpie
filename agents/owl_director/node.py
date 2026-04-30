@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any
 
@@ -27,14 +28,23 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     )
 
     current_strategy = state.get("current_strategy")
+    strategy_str = (
+        json.dumps(current_strategy, indet=2, ensure_ascii=False)
+        if current_strategy
+        else "현재 설정된 전략이 없습니다."
+    )
 
-    injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{current_strategy}\n"
+    injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{strategy_str}\n"
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
     try:
         agent = get_owl_llm()
         response: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
+
+        if not response.content and not response.tool_calls:
+            logger.warning("OWL LLM이 빈 응답을 반환했습니다. 재시도나 확인이 필요합니다.")
+
     except Exception as e:
         logger.exception("Owl LLM 호출 실패")
         raise RuntimeError("Owl 에이전트 실행 중 오류가 발생했습니다.") from e

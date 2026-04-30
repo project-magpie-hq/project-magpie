@@ -1,6 +1,7 @@
 from enum import StrEnum
 from typing import Any
 
+from langgraph.graph import END
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -31,7 +32,7 @@ class StrategySchema(BaseModel):
 
 class AgentEnum(StrEnum):
     MEERKAT = "meerkat_scanner"
-    END = "END"
+    END = END
 
 
 class RouterToolInput(BaseModel):
