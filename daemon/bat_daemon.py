@@ -129,7 +129,6 @@ class BatDaemon:
 
     async def _check_realtime_signals(self, coin: str, current_price: float, target_entity: TargetEntity) -> None:
         """실시간(TOUCH) 조건 판별: 손절, 익절, TOUCH 방식의 매수"""
-
         if target_entity.status == TargetStatus.HOLDING:
             if current_price >= target_entity.take_profit_price:
                 print(f"💰 [PROFIT SIGNAL] {coin} 익절가 돌파! (현재가: {current_price:,.0f}원)")

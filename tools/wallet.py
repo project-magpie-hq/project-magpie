@@ -38,10 +38,7 @@ async def register_wallet(user_id: str, initial_balance: float = 100000000) -> W
     return wallet_entity
 
 
-@tool
-async def get_wallet(state: Annotated[dict, InjectedState]) -> WalletEntity | None:
-    """사용자의 가상 지갑 현황을 확인합니다."""
-    user_id: str = state["user_id"]
+async def fetch_wallet_by_user(user_id: str) -> WalletEntity | None:
     try:
         wallet = await wallets_collection.find_one({"user_id": user_id})
     except Exception as e:
@@ -52,15 +49,23 @@ async def get_wallet(state: Annotated[dict, InjectedState]) -> WalletEntity | No
         wallet_entity = WalletEntity.model_validate(wallet)
         print(f"🪹 [The Nest]: 사용자({user_id})의 가상 지갑을 성공적으로 조회했습니다.")
         return wallet_entity
-    else:
-        print(f"🪹 [The Nest]: 사용자({user_id})의 가상 지갑을 찾을 수 없습니다.")
-        return None
+
+    print(f"🪹 [The Nest]: 사용자({user_id})의 가상 지갑을 찾을 수 없습니다.")
+    return None
+
+
+@tool
+async def get_wallet(state: Annotated[dict, InjectedState]) -> WalletEntity | None:
+    """사용자의 가상 지갑 현황을 확인합니다."""
+    user_id: str = state["user_id"]
+
+    return await fetch_wallet_by_user(user_id)
 
 
 async def update_wallet(user_id: str, market: str, signal: SignalType, price: float, volume: float) -> WalletEntity:
     """체결 시 호출되어 지갑의 자산 상태를 수정합니다."""
 
-    current_wallet = wallets_collection.find_one({"user_id": user_id})
+    current_wallet = await wallets_collection.find_one({"user_id": user_id})
     if not current_wallet:
         raise ValueError(f"사용자({user_id})의 가상 지갑을 찾을 수 없습니다. 초기화를 먼저 진행하세요.")
 

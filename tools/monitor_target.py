@@ -59,19 +59,24 @@ async def register_monitoring_targets_to_nest(
     return "모든 타점 등록 및 업데이트가 성공적으로 완료되었습니다."
 
 
-@tool
-async def get_my_all_monitoring_targets(
-    state: Annotated[dict, InjectedState],
-) -> list | None:
-    """사용자의 타점을 열람하기 원할 때 호출하여, 사용자의 모든 타점을 보여줍니다."""
-    user_id: str = state["user_id"]
-
+async def fetch_monitoring_targets_by_user(user_id: str) -> list[dict] | None:
     try:
         cursor = monitoring_targets_collection.find({"user_id": user_id})
         monitoring_targets = await cursor.to_list(length=100)
     except Exception as e:
         logger.exception("타점 DB 조회 실패 (user_id: %s)", user_id)
         raise RuntimeError("타점 조회 중 DB 오류가 발생했습니다.") from e
+
+    return monitoring_targets if monitoring_targets else None
+
+
+@tool
+async def get_my_all_monitoring_targets(
+    state: Annotated[dict, InjectedState],
+) -> list | None:
+    """사용자의 타점을 열람하기 원할 때 호출하여, 사용자의 모든 타점을 보여줍니다."""
+    user_id: str = state["user_id"]
+    monitoring_targets = await fetch_monitoring_targets_by_user(user_id)
 
     if monitoring_targets:
         print(f"🔍 [{user_id}]님의 타점을 The-Nest에서 꺼내왔습니다.")

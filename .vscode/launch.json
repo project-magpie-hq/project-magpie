@@ -47,9 +47,12 @@
       "name": "🦇 Bat Daemon",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/bat_daemon.py",
+      "program": "${workspaceFolder}/daemon/bat_daemon.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}"
+      },
       "justMyCode": true,
     },
     {
