@@ -1,7 +1,7 @@
 import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
-from typing import Literal
 
 from agents.meerkat_scanner.schema import TargetSchema
 from agents.owl_director.schema import StrategySchema
@@ -25,7 +25,7 @@ class AssetEntity(BaseModel):
 
 class WalletEntity(BASE):
     balance: float = Field(ge=0.0, description="보유 원화")
-    assets: dict[str, AssetEntity] = Field(default_factory=dict)
+    assets: dict[str, AssetEntity | None] = Field(default_factory=dict)
 
 
 class TradeHistoryEntity(BASE):
