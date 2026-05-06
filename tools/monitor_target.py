@@ -7,7 +7,7 @@ from langgraph.prebuilt import InjectedState
 
 from agents.meerkat_scanner.schema import MonitoringTargets, TargetSchema
 from db.entity import TargetEntity
-from db.mongo import monitoring_target_collection
+from db.mongo import monitoring_targets_collection
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ async def register_monitoring_targets_to_nest(
 
         print("\n" + "⚙️ " * 15)
         try:
-            result = await monitoring_target_collection.update_one(filter_query, update_query, upsert=True)
+            result = await monitoring_targets_collection.update_one(filter_query, update_query, upsert=True)
         except Exception as e:
             logger.exception(
                 "타점 DB 저장 실패 (user_id: %s, coin: %s)",
@@ -67,7 +67,7 @@ async def get_my_all_monitoring_targets(
     user_id: str = state["user_id"]
 
     try:
-        cursor = monitoring_target_collection.find({"user_id": user_id})
+        cursor = monitoring_targets_collection.find({"user_id": user_id})
         monitoring_targets = await cursor.to_list(length=100)
     except Exception as e:
         logger.exception("타점 DB 조회 실패 (user_id: %s)", user_id)
