@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Any
 
@@ -9,11 +8,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
 from agents.constant import NodeNames
-from agents.owl_director.schema import StrategySchema
 from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
 from tools.router import transfer_to_agent
-from tools.strategy import get_my_active_strategy, register_strategy_to_nest
+from tools.strategy import fetch_strategy_by_user, get_my_active_strategy, register_strategy_to_nest
+from tools.wallet import get_wallet, process_trade_execution
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +26,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
         load_prompt("prompt_from_daemon.md") if state.get("from_daemon") else load_prompt("prompt_from_user.md")
     )
 
-    current_strategy = state.get("current_strategy")
-    strategy_str = (
-        json.dumps(current_strategy, indet=2, ensure_ascii=False)
-        if current_strategy
-        else "현재 설정된 전략이 없습니다."
-    )
-
-    injected_prompt = system_prompt + additional_prompt + f"\n[현재 시스템에 적용된 매매 전략]\n{strategy_str}\n"
+    injected_prompt = system_prompt + additional_prompt
 
     messages_to_llm = [SystemMessage(content=injected_prompt)] + state["messages"]
 
@@ -51,15 +43,12 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     updates: dict[str, Any] = {"messages": [response]}
 
+    current_strategy = await fetch_strategy_by_user(state["user_id"])
+    updates["current_strategy"] = current_strategy
+
     if response.tool_calls:
         for tool_call in response.tool_calls:
             print(f"   🛠️ [Owl]: 도구 호출 결정 -> {tool_call['name']}")
-            if tool_call["name"] == "register_strategy_to_nest":
-                strategy_update = StrategySchema(
-                    target_coins=tool_call["args"].get("target_coins", []),
-                    strategy_details=tool_call["args"].get("strategy_details", {}),
-                )
-                updates["current_strategy"] = strategy_update.model_dump()
 
     return updates
 
@@ -68,7 +57,13 @@ def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Owl 에이전트 모델 초기화"""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        tools = [register_strategy_to_nest, get_my_active_strategy, transfer_to_agent]
+        tools = [
+            register_strategy_to_nest,
+            get_my_active_strategy,
+            transfer_to_agent,
+            get_wallet,
+            process_trade_execution,
+        ]
         return llm.bind_tools(tools)
     except Exception as e:
         logger.exception("Owl LLM 초기화 실패")

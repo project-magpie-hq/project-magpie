@@ -52,11 +52,7 @@ async def register_strategy_to_nest(
     return "투자 전략 등록 및 업데이트가 성공적으로 완료되었습니다."
 
 
-@tool
-async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict | None:
-    """사용자가 본인의 전략을 열람하기 원할 때 호출하여, 활성화된 전략을 보여줍니다."""
-    user_id: str | None = state.get("user_id")
-
+async def fetch_strategy_by_user(user_id: str) -> dict | None:
     try:
         strategy = await strategies_collection.find_one({"user_id": user_id})
     except Exception as e:
@@ -70,3 +66,10 @@ async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict 
     else:
         print("아직 아무것도 저장되어 있지 않습니다!")
         return None
+
+
+@tool
+async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict | None:
+    """사용자가 본인의 전략을 열람하기 원할 때 호출하여, 활성화된 전략을 보여줍니다."""
+    strategy = await fetch_strategy_by_user(state["user_id"])
+    return strategy

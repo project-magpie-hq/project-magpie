@@ -12,6 +12,7 @@ class TargetStatus(StrEnum):
     WAITING_BUY = "WAITING_BUY"
     HOLDING = "HOLDING"
     DONE = "DONE"
+    CHECKING = "CHECKING"
     EXPIRED = "EXPIRED"
 
 
@@ -19,9 +20,7 @@ class TargetSchema(BaseModel):
     target_coin: str = Field(
         description="투자할 타겟 코인 티커 (예: 'KRW-BTC', 'KRW-SOL'). 반드시 업비트 티커 형식으로 작성"
     )
-    # TODO: description 작성
-    status: TargetStatus = Field(description="")
-
+    status: TargetStatus = Field(description="현재 타겟 상태")
     # [가격 조건 - 매수]
     buy_price_upper_limit: float = Field(
         description="추격 매수(FOMO)를 방지하는 매수 허용 상한선. 이 가격 위로는 절대 사지 마라."
@@ -32,7 +31,6 @@ class TargetSchema(BaseModel):
     # [가격 조건 - 매도]
     take_profit_price: float = Field(description="익절 목표가")
     stop_loss_price: float = Field(description="손절 방어선")
-
     # [캔들 조건]
     trigger_basis: TriggerBasis = Field(
         description="TOUCH는 꼬리 도달 시 즉시 체결, CLOSE는 1시간 캔들 종가 확정 시 체결"

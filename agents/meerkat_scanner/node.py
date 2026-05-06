@@ -10,7 +10,11 @@ from agents.meerkat_scanner.chart_compressor import generate_chart_context
 from agents.owl_director.schema import StrategySchema
 from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
-from tools.monitor_target import register_monitoring_targets_to_nest
+from tools.monitor_target import (
+    fetch_monitoring_targets_by_user,
+    register_monitoring_targets_to_nest,
+)
+from tools.wallet import fetch_wallet_by_user
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,35 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
         {feedback_data}
     """
 
+    # 1. 현재 자산 정보 추가
+    current_wallet = await fetch_wallet_by_user(state["user_id"])
+    if current_wallet:
+        user_input += f"""
+            [현재 자산]
+            {current_wallet.model_dump_json(indent=2)}
+        """
+
+    # 2. 현재 등록된 타점 정보 추가
+    existing_targets = await fetch_monitoring_targets_by_user(state["user_id"])
+    if existing_targets:
+        clean_targets = []
+        for t in existing_targets:
+            clean_targets.append(
+                {
+                    "target_coin": t.get("target_coin"),
+                    "status": t.get("status"),
+                    "buy_price_upper_limit": t.get("buy_price_upper_limit"),
+                    "buy_price_lower_limit": t.get("buy_price_lower_limit"),
+                    "take_profit_price": t.get("take_profit_price"),
+                    "stop_loss_price": t.get("stop_loss_price"),
+                }
+            )
+
+        user_input += f"""
+            [현재 등록된 타점 정보]
+            {clean_targets}
+        """
+
     llm_messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
 
     try:
@@ -83,7 +116,10 @@ def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Meerkat 에이전트 모델 초기화"""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        return llm.bind_tools([register_monitoring_targets_to_nest], tool_choice="register_monitoring_targets_to_nest")
+        return llm.bind_tools(
+            [register_monitoring_targets_to_nest],
+            tool_choice="register_monitoring_targets_to_nest",
+        )
     except Exception as e:
         logger.exception("Meerkat LLM 초기화 실패")
         raise RuntimeError("Meerkat LLM 초기화 실패") from e
