@@ -10,6 +10,7 @@ client: AsyncIOMotorClient = AsyncIOMotorClient(MONGO_URL)
 db = client["the_nest"]
 
 # 공용 컬렉션 객체
-monitoring_target_collection = db["monitoring_targets"]
+monitoring_targets_collection = db["monitoring_targets"]
 strategies_collection = db["strategies"]
-portfolio_snapshot_collection = db["portfolio_snapshots"]
+wallets_collection = db["wallets"]
+trade_history_collection = db["trade_history"]
