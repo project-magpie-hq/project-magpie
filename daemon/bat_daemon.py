@@ -133,13 +133,13 @@ class BatDaemon:
         if target_entity.status == TargetStatus.HOLDING:
             if current_price >= target_entity.take_profit_price:
                 print(f"💰 [PROFIT SIGNAL] {coin} 익절가 돌파! (현재가: {current_price:,.0f}원)")
-                target_entity.status = TargetStatus.DONE
-                await self._update_target_status(coin, TargetStatus.DONE)
+                target_entity.status = TargetStatus.CHECKING
+                await self._update_target_status(coin, TargetStatus.CHECKING)
                 self._schedule_graph_run(target_entity, SignalType.SELL, current_price, "take_profit_hit")
             elif current_price <= target_entity.stop_loss_price:
                 print(f"🩸 [STOP LOSS SIGNAL] {coin} 손절선 붕괴! 비상 탈출! (현재가: {current_price:,.0f}원)")
-                target_entity.status = TargetStatus.DONE
-                await self._update_target_status(coin, TargetStatus.DONE)
+                target_entity.status = TargetStatus.CHECKING
+                await self._update_target_status(coin, TargetStatus.CHECKING)
                 self._schedule_graph_run(target_entity, SignalType.SELL, current_price, "stop_loss_hit")
 
         elif (
@@ -148,8 +148,8 @@ class BatDaemon:
             and target_entity.buy_price_lower_limit <= current_price <= target_entity.buy_price_upper_limit
         ):
             print(f"🚀 [BUY SIGNAL - TOUCH] {coin} 매수 영역 진입! (현재가: {current_price:,.0f}원)")
-            target_entity.status = TargetStatus.HOLDING
-            await self._update_target_status(coin, TargetStatus.HOLDING)
+            target_entity.status = TargetStatus.CHECKING
+            await self._update_target_status(coin, TargetStatus.CHECKING)
             self._schedule_graph_run(target_entity, SignalType.BUY, current_price, "touch_entry_hit")
 
     async def _evaluate_closed_candle(self, coin: str, closed_candle: dict[str, Any], target_entity: TargetEntity):
@@ -181,8 +181,8 @@ class BatDaemon:
             return
 
         print(f"🚀 [BUY SIGNAL - CLOSE] {coin} 1시간 캔들 마감 조건 완벽 충족! (종가: {close_price:,.0f}원)")
-        target_entity.status = TargetStatus.HOLDING
-        await self._update_target_status(coin, TargetStatus.HOLDING)
+        target_entity.status = TargetStatus.CHECKING
+        await self._update_target_status(coin, TargetStatus.CHECKING)
         self._schedule_graph_run(target_entity, SignalType.BUY, close_price, "close_entry_hit")
 
     def _schedule_graph_run(
@@ -211,24 +211,26 @@ class BatDaemon:
             f"{datetime.datetime.now(datetime.UTC).strftime('%Y%m%dT%H%M%S')}"
         )
 
-        user_input = f"""
-            Bat daemon detected a {signal_type} signal on {target_entity.target_coin} at approximately {current_price:,.0f} KRW.
-            event_reason: {event_reason}.
-            Owl은 유지/축소/보류 여부를 명확히 판단한 뒤 Meerkat에게 금액 중심 피드백을 전달하세요.
-        """
+        event_data = {
+            "target_coin": target_entity.target_coin,
+            "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+            "current_price": current_price,
+            "event_reason": event_reason,
+        }
+
+        user_message = f"""[SYSTEM_ALERT: TARGET_REACHED]\n{json.dumps(event_data, ensure_ascii=False, indent=2)}"""
 
         inputs = {
-            "user_id": user_id,
-            "messages": user_input,
+            "user_id": self.user_id,
+            "messages": [user_message],
             "from_daemon": True,
         }
 
         print(
             f"   🤝 [Daemon->Graph]: {self.user_id} / {target_entity.target_coin} / "
-            f"{signal_type} 이벤트를 Beaver->Owl 그래프로 전달합니다."
+            f"{signal_type} 이벤트를 Owl 그래프로 전달합니다."
         )
-        result = await self.magpie_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
-        print(result)
+        await self.magpie_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
 
     async def _update_target_status(self, target_coin: str, new_status: TargetStatus):
         await collection.update_one(

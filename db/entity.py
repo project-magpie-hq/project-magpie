@@ -1,10 +1,10 @@
 import datetime
-from enum import StrEnum, auto
 
 from pydantic import BaseModel, Field
 
 from agents.meerkat_scanner.schema import TargetSchema
 from agents.owl_director.schema import StrategySchema
+from daemon.constant import SignalType
 
 
 class BASE(BaseModel):
@@ -16,11 +16,6 @@ class StrategyEntity(StrategySchema, BASE): ...
 
 
 class TargetEntity(TargetSchema, BASE): ...
-
-
-class ActionType(StrEnum):
-    BUY = auto()
-    SELL = auto()
 
 
 class AssetEntity(BaseModel):
@@ -35,7 +30,7 @@ class WalletEntity(BASE):
 
 class TradeHistoryEntity(BASE):
     market: str
-    action: ActionType
+    signal: SignalType
     price: float = Field(ge=0.0, description="체결가")
     volume: float = Field(ge=0.0, description="체결 수량")
     total_price: float = Field(ge=0.0)

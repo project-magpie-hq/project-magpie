@@ -1,15 +1,18 @@
 import datetime
 import logging
+from typing import Annotated
 
 from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedState
 
-from db.entity import ActionType, AssetEntity, WalletEntity
+from daemon.constant import SignalType
+from db.entity import AssetEntity, WalletEntity
 from db.mongo import wallets_collection
+from tools.trade_history import register_trade_history
 
 logger = logging.getLogger(__name__)
 
 
-@tool
 async def register_wallet(user_id: str, initial_balance: float = 100000000) -> WalletEntity:
     """사용자의 가상 지갑을 등록합니다. 만약, 이미 존재할 경우 초기화 합니다."""
 
@@ -36,8 +39,9 @@ async def register_wallet(user_id: str, initial_balance: float = 100000000) -> W
 
 
 @tool
-async def get_wallet(user_id: str) -> WalletEntity | None:
+async def get_wallet(state: Annotated[dict, InjectedState]) -> WalletEntity | None:
     """사용자의 가상 지갑 현황을 확인합니다."""
+    user_id: str = state["user_id"]
     try:
         wallet = await wallets_collection.find_one({"user_id": user_id})
     except Exception as e:
@@ -53,8 +57,7 @@ async def get_wallet(user_id: str) -> WalletEntity | None:
         return None
 
 
-@tool
-async def update_wallet(user_id: str, market: str, action: ActionType, price: float, volume: float) -> WalletEntity:
+async def update_wallet(user_id: str, market: str, signal: SignalType, price: float, volume: float) -> WalletEntity:
     """체결 시 호출되어 지갑의 자산 상태를 수정합니다."""
 
     current_wallet = wallets_collection.find_one({"user_id": user_id})
@@ -64,7 +67,7 @@ async def update_wallet(user_id: str, market: str, action: ActionType, price: fl
     wallet = WalletEntity.model_validate(current_wallet)
     total_price = price * volume
 
-    if action == ActionType.BUY:
+    if signal == SignalType.BUY:
         if wallet.balance < total_price:
             raise ValueError(f"잔액 부족: 필요 {total_price:,.0f} / 보유 {wallet.balance:,.0f}")
 
@@ -77,7 +80,7 @@ async def update_wallet(user_id: str, market: str, action: ActionType, price: fl
 
             wallet.assets[market] = AssetEntity(volume=new_volume, avg_buy_price=new_avg_price)
 
-    elif action == ActionType.SELL:
+    elif signal == SignalType.SELL:
         asset = wallet.assets.get(market)
         if asset is None or asset.volume < volume:
             raise ValueError(f"매도 수량 부족: 보유 {asset.volume if asset else 0} / 요청 {volume}")
@@ -97,5 +100,32 @@ async def update_wallet(user_id: str, market: str, action: ActionType, price: fl
         logger.exception("가상 지갑 DB 수정 실패 (user_id: %s)", user_id)
         raise RuntimeError("가상 지갑 수정 중 DB 오류가 발생했습니다.") from e
 
-    print(f"🪹 [The Nest]: [{action.value.upper()}] 체결 완료: {market} | 가격: {price:,.0f} | 수량: {volume}")
+    print(f"🪹 [The Nest]: [{signal.value.upper()}] 체결 완료: {market} | 가격: {price:,.0f} | 수량: {volume}")
     return wallet
+
+
+@tool
+async def process_trade_execution(
+    market: str, signal: SignalType, price: float, volume: float, state: Annotated[dict, InjectedState]
+) -> str:
+    """
+    매매 체결 시 호출되어 지갑의 자산 상태를 수정하고, 체결 이력을 DB에 등록합니다.
+    잔고가 부족하거나 조건이 맞지 않으면 에러 메시지를 반환합니다.
+
+    Args:
+        market: 거래할 타겟 코인 (예: 'KRW-BTC')
+        signal: 'BUY' (매수) 또는 'SELL' (매도)
+        price: 체결 단가
+        volume: 체결 수량
+    """
+
+    user_id: str = state["user_id"]
+    wallet = await update_wallet(user_id, market, signal, price, volume)
+    await register_trade_history(user_id, market, signal, price, volume)
+
+    return (
+        f"✅ [체결 성공] {market} {signal.upper()} | "
+        f"단가: {price:,.0f} | 수량: {volume} | "
+        f"총액: {price * volume:,.0f} KRW\n"
+        f"현재 원화 잔고: {wallet.balance:,.0f} KRW"
+    )

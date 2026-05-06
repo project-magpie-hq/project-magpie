@@ -14,6 +14,7 @@ from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
 from tools.router import transfer_to_agent
 from tools.strategy import get_my_active_strategy, register_strategy_to_nest
+from tools.wallet import get_wallet, process_trade_execution
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,13 @@ def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Owl 에이전트 모델 초기화"""
     try:
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        tools = [register_strategy_to_nest, get_my_active_strategy, transfer_to_agent]
+        tools = [
+            register_strategy_to_nest,
+            get_my_active_strategy,
+            transfer_to_agent,
+            get_wallet,
+            process_trade_execution,
+        ]
         return llm.bind_tools(tools)
     except Exception as e:
         logger.exception("Owl LLM 초기화 실패")

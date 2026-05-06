@@ -11,7 +11,9 @@ from agents.meerkat_scanner.node import meerkat_node
 from agents.owl_director.node import owl_node, route_after_owl, route_after_owl_tools
 from state.magpie import MagpieState
 from tools.monitor_target import register_monitoring_targets_to_nest
+from tools.router import transfer_to_agent
 from tools.strategy import get_my_active_strategy, register_strategy_to_nest
+from tools.wallet import get_wallet, process_trade_execution
 
 load_dotenv()
 
@@ -26,7 +28,18 @@ def build_graph() -> CompiledStateGraph:
         # 1. 노드 정의
         # Owl Director: 사용자 응대 및 전략 수립
         workflow.add_node(NodeNames.OWL_DIRECTOR.value, owl_node)
-        workflow.add_node(NodeNames.OWL_TOOLS.value, ToolNode([get_my_active_strategy, register_strategy_to_nest]))
+        workflow.add_node(
+            NodeNames.OWL_TOOLS.value,
+            ToolNode(
+                [
+                    register_strategy_to_nest,
+                    get_my_active_strategy,
+                    transfer_to_agent,
+                    get_wallet,
+                    process_trade_execution,
+                ]
+            ),
+        )
 
         # Meerkat Scanner: 차트 분석 및 타점 계산
         workflow.add_node(NodeNames.MEERKAT_SCANNER.value, meerkat_node)

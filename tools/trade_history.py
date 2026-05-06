@@ -1,16 +1,14 @@
 import logging
 
-from langchain_core.tools import tool
-
-from db.entity import ActionType, TradeHistoryEntity
+from daemon.constant import SignalType
+from db.entity import TradeHistoryEntity
 from db.mongo import trade_history_collection
 
 logger = logging.getLogger(__name__)
 
 
-@tool
 async def register_trade_history(
-    user_id: str, market: str, action: ActionType, price: float, volume: float
+    user_id: str, market: str, signal: SignalType, price: float, volume: float
 ) -> TradeHistoryEntity:
     """사용자의 체결 이력을 등록합니다."""
 
@@ -18,7 +16,7 @@ async def register_trade_history(
         {
             "user_id": user_id,
             "market": market,
-            "action": action,
+            "signal": signal,
             "price": price,
             "volume": volume,
             "total_price": price * volume,
