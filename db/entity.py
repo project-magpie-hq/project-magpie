@@ -1,5 +1,5 @@
 import datetime
-from typing import Literal
+from enum import StrEnum, auto
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,11 @@ class StrategyEntity(StrategySchema, BASE): ...
 class TargetEntity(TargetSchema, BASE): ...
 
 
+class ActionType(StrEnum):
+    BUY = auto()
+    SELL = auto()
+
+
 class AssetEntity(BaseModel):
     volume: float = Field(ge=0.0, description="보유 수량")
     avg_buy_price: float = Field(ge=0.0, description="매수 평균가")
@@ -30,7 +35,7 @@ class WalletEntity(BASE):
 
 class TradeHistoryEntity(BASE):
     market: str
-    type: Literal["buy", "sell"]
+    action: ActionType
     price: float = Field(ge=0.0, description="체결가")
     volume: float = Field(ge=0.0, description="체결 수량")
     total_price: float = Field(ge=0.0)

@@ -1,10 +1,9 @@
 import datetime
 import logging
-from typing import Literal
 
 from langchain_core.tools import tool
 
-from db.entity import AssetEntity, WalletEntity
+from db.entity import ActionType, AssetEntity, WalletEntity
 from db.mongo import wallets_collection
 
 logger = logging.getLogger(__name__)
@@ -55,9 +54,7 @@ async def get_wallet(user_id: str) -> WalletEntity | None:
 
 
 @tool
-async def update_wallet(
-    user_id: str, market: str, type: Literal["buy", "sell"], price: float, volume: float
-) -> WalletEntity:
+async def update_wallet(user_id: str, market: str, action: ActionType, price: float, volume: float) -> WalletEntity:
     """체결 시 호출되어 지갑의 자산 상태를 수정합니다."""
 
     current_wallet = wallets_collection.find_one({"user_id": user_id})
@@ -65,27 +62,27 @@ async def update_wallet(
         raise ValueError(f"사용자({user_id})의 가상 지갑을 찾을 수 없습니다. 초기화를 먼저 진행하세요.")
 
     wallet = WalletEntity.model_validate(current_wallet)
-    total_krw = price * volume
+    total_price = price * volume
 
-    if type == "buy":
-        if wallet.balance < total_krw:
-            raise ValueError(f"잔액 부족: 필요 {total_krw:,.0f} / 보유 {wallet.balance:,.0f}")
+    if action == ActionType.BUY:
+        if wallet.balance < total_price:
+            raise ValueError(f"잔액 부족: 필요 {total_price:,.0f} / 보유 {wallet.balance:,.0f}")
 
-        wallet.balance -= total_krw
+        wallet.balance -= total_price
 
         asset = wallet.assets.get(market, AssetEntity(volume=0.0, avg_buy_price=0.0))
         if asset is not None:
             new_volume = asset.volume + volume
-            new_avg_price = ((asset.volume * asset.avg_buy_price) + total_krw) / new_volume
+            new_avg_price = ((asset.volume * asset.avg_buy_price) + total_price) / new_volume
 
             wallet.assets[market] = AssetEntity(volume=new_volume, avg_buy_price=new_avg_price)
 
-    elif type == "sell":
+    elif action == ActionType.SELL:
         asset = wallet.assets.get(market)
         if asset is None or asset.volume < volume:
             raise ValueError(f"매도 수량 부족: 보유 {asset.volume if asset else 0} / 요청 {volume}")
 
-        wallet.balance += total_krw
+        wallet.balance += total_price
 
         asset.volume -= volume
         if asset.volume == 0:
@@ -100,5 +97,5 @@ async def update_wallet(
         logger.exception("가상 지갑 DB 수정 실패 (user_id: %s)", user_id)
         raise RuntimeError("가상 지갑 수정 중 DB 오류가 발생했습니다.") from e
 
-    print(f"🪹 [The Nest]: [{type.upper()}] 체결 완료: {market} | 가격: {price:,.0f} | 수량: {volume}")
+    print(f"🪹 [The Nest]: [{action.value.upper()}] 체결 완료: {market} | 가격: {price:,.0f} | 수량: {volume}")
     return wallet
