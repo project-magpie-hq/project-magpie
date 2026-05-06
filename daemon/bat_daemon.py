@@ -16,7 +16,7 @@ from daemon.constant import (
     SignalType,
 )
 from db.entity import TargetEntity
-from db.mongo import monitoring_target_collection as collection
+from db.mongo import monitoring_targets_collection as collection
 from main.graph import build_graph
 
 logger = logging.getLogger(__name__)
