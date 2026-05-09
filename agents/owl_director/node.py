@@ -11,7 +11,7 @@ from agents.constant import NodeNames
 from agents.utils import load_prompt, normalize_content
 from state.magpie import MagpieState
 from tools.router import transfer_to_agent
-from tools.strategy import fetch_strategy_by_user, get_my_active_strategy, register_strategy_to_nest
+from tools.strategy import get_my_active_strategy, register_strategy_to_nest
 from tools.wallet import get_wallet, process_trade_execution
 
 logger = logging.getLogger(__name__)
@@ -42,9 +42,6 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
         raise RuntimeError("Owl 에이전트 실행 중 오류가 발생했습니다.") from e
 
     updates: dict[str, Any] = {"messages": [response]}
-
-    current_strategy = await fetch_strategy_by_user(state["user_id"])
-    updates["current_strategy"] = current_strategy
 
     if response.tool_calls:
         for tool_call in response.tool_calls:
@@ -90,12 +87,12 @@ def route_after_owl(state: MagpieState) -> str:
 
 
 def route_after_owl_tools(state: MagpieState) -> str:
-    """owl_tools 실행 후 라우팅: register_strategy_to_nest 실행 시 meerkat_scanner로 자동 이동"""
+    """owl_tools 실행 후 라우팅: register_strategy_to_nest 실행 시 meerkat으로 이동"""
     messages = state.get("messages", [])
     last_msg = messages[-1]
 
     if getattr(last_msg, "name", None) == "register_strategy_to_nest":
-        print("   🦉 [Owl Tools]: 전략 등록 완료 → Meerkat Scanner 자동 호출")
+        print("   🦉 [Owl Tools]: 전략 등록 완료 → Meerkat Scanner 호출")
         return NodeNames.MEERKAT_SCANNER.value
 
     return NodeNames.OWL_DIRECTOR.value

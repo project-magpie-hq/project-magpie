@@ -14,6 +14,7 @@ from tools.monitor_target import (
     fetch_monitoring_targets_by_user,
     register_monitoring_targets_to_nest,
 )
+from tools.strategy import fetch_strategy_by_user
 from tools.wallet import fetch_wallet_by_user
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
 
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
-    current_strategy = state.get("current_strategy")
+    current_strategy = await fetch_strategy_by_user(state["user_id"])
     if current_strategy is None:
         print("   ⚠️ [Meerkat]: 전략 정보가 없어 계산을 중단합니다.")
         # transfer_to_agent 호출에 대한 ToolMessage를 합성해야 meerkat_tools가 해당 tool_call을 실행하지 않음

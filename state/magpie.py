@@ -3,8 +3,6 @@ from typing import Any
 
 from langgraph.graph import MessagesState
 
-from agents.owl_director.schema import StrategySchema
-
 
 class AgentEnum(StrEnum):
     MEERKAT = "meerkat_scanner"
@@ -21,8 +19,6 @@ class MagpieState(MessagesState):
     from_daemon: bool
     # Owl이 다음 Agent를 누구를 부를지 결정하는 변수
     next_agent: AgentEnum | None
-    # 현재 사용 중인 전략
-    current_strategy: StrategySchema | None
     # 에이전트가 실행될 특정 시점
     current_sim_time: str | None
 
