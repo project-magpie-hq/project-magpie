@@ -2,43 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "📈 Run Simulator: BULL (상승장)",
+      "name": "🦉 Magpie Agent",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/simulator/run.py",
+      "module": "magpie_agent.run",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "env": {
-        "IS_SIMULATION": "True",
-        "MARKET_PHASE": "BULL",
-        "PYTHONPATH": "${workspaceFolder}"
-      },
-      "justMyCode": true
-    },
-    {
-      "name": "📉 Run Simulator: BEAR (하락장)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/simulator/run.py",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env",
-      "env": {
-        "IS_SIMULATION": "True",
-        "MARKET_PHASE": "BEAR",
-        "PYTHONPATH": "${workspaceFolder}"
-      },
-      "justMyCode": true
-    },
-    {
-      "name": "➖ Run Simulator: SIDEWAYS (횡보장)",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/simulator/run.py",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env",
-      "env": {
-        "IS_SIMULATION": "True",
-        "MARKET_PHASE": "SIDEWAYS",
         "PYTHONPATH": "${workspaceFolder}"
       },
       "justMyCode": true
@@ -47,25 +17,33 @@
       "name": "🦇 Bat Daemon",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/daemon/bat_daemon.py",
+      "module": "bat_daemon.run",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "env": {
         "PYTHONPATH": "${workspaceFolder}"
       },
-      "justMyCode": true,
+      "justMyCode": true
     },
     {
-      "name": "🦉 Magpie Director",
+      "name": "🧪 Bat Backtest",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/main/run.py",
+      "module": "bat_daemon.backtest",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
+      "args": [
+        "--user-id",
+        "test_developer_001",
+        "--start",
+        "2024-01-01 00:00:00",
+        "--end",
+        "2024-02-01 00:00:00"
+      ],
       "env": {
         "PYTHONPATH": "${workspaceFolder}"
       },
-      "justMyCode": true,
+      "justMyCode": true
     }
   ]
 }

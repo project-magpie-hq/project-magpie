@@ -2,9 +2,9 @@ import datetime
 
 from pydantic import BaseModel, Field
 
-from agents.meerkat_scanner.schema import TargetSchema
-from agents.owl_director.schema import StrategySchema
-from daemon.constant import SignalType
+from bat_daemon.constant import SignalType
+from magpie_agent.agents.meerkat_scanner.schema import TargetSchema
+from magpie_agent.agents.owl_director.schema import StrategySchema
 
 
 class BASE(BaseModel):
