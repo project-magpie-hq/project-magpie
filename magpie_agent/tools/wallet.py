@@ -8,6 +8,7 @@ from langgraph.prebuilt import InjectedState
 from bat_daemon.constant import SignalType
 from db.entity import AssetEntity, WalletEntity
 from db.mongo import wallets_collection
+from magpie_agent.tools.telegram import send_telegram_message
 from magpie_agent.tools.trade_history import register_trade_history
 
 logger = logging.getLogger(__name__)
@@ -128,9 +129,33 @@ async def process_trade_execution(
     wallet = await update_wallet(user_id, market, signal, price, volume)
     await register_trade_history(user_id, market, signal, price, volume)
 
+    # 텔레그램 알림 메시지 구성
+    total_price = price * volume
+    asset = wallet.assets.get(market)
+    holding_info = (
+        f"보유 코인({market}): {asset.volume:.4f} (평단: {asset.avg_buy_price:,.0f} 원)"
+        if asset
+        else f"보유 코인({market}): 0"
+    )
+
+    notification_msg = (
+        f"🚨 [매매 체결 알림]\n"
+        f"코인: {market}\n"
+        f"액션: {signal.upper()}\n"
+        f"단가: {price:,.0f} 원\n"
+        f"수량: {volume}\n"
+        f"총액: {total_price:,.0f} 원\n\n"
+        f"💰 지갑 현황\n"
+        f"보유 잔고: {wallet.balance:,.0f} 원\n"
+        f"{holding_info}"
+    )
+
+    # 비동기로 알림 전송 (실패해도 메인 로직은 유지)
+    await send_telegram_message(chat_id=user_id, text=notification_msg)
+
     return (
         f"✅ [체결 성공] {market} {signal.upper()} | "
         f"단가: {price:,.0f} | 수량: {volume} | "
-        f"총액: {price * volume:,.0f} KRW\n"
+        f"총액: {total_price:,.0f} KRW\n"
         f"현재 원화 잔고: {wallet.balance:,.0f} KRW"
     )
