@@ -101,7 +101,9 @@ class BatDaemon:
         if self.watching_coins == old_watching_coins:
             return
 
-        print(f"   🔄 [DB 동기화]: 감시 대상 코인 변경 감지 -> 기존: {old_watching_coins} / 변경: {self.watching_coins}")
+        print(
+            f"   🔄 [DB 동기화]: 감시 대상 코인 변경 감지 -> 기존: {old_watching_coins} / 변경: {self.watching_coins}"
+        )
         await self._close_ws_connection()
 
     async def _close_ws_connection(self) -> None:
@@ -163,7 +165,9 @@ class BatDaemon:
         if not self._passes_close_buy_conditions(coin, parsed_candle, target_entity):
             return
 
-        print(f"🚀 [BUY SIGNAL - CLOSE] {coin} 1시간 캔들 마감 조건 완벽 충족! (종가: {parsed_candle.close_price:,.0f}원)")
+        print(
+            f"🚀 [BUY SIGNAL - CLOSE] {coin} 1시간 캔들 마감 조건 완벽 충족! (종가: {parsed_candle.close_price:,.0f}원)"
+        )
         await self._emit_signal(target_entity, SignalType.BUY, parsed_candle.close_price, "close_entry_hit")
 
     async def _check_exit_signal(self, tick: CandleTick, target_entity: TargetEntity) -> None:
@@ -174,9 +178,7 @@ class BatDaemon:
             print(f"🩸 [STOP LOSS SIGNAL] {tick.coin} 손절선 붕괴! 비상 탈출! (현재가: {tick.current_price:,.0f}원)")
             await self._emit_signal(target_entity, SignalType.SELL, tick.current_price, "stop_loss_hit")
 
-    def _passes_close_buy_conditions(
-        self, coin: str, closed_candle: ClosedCandle, target_entity: TargetEntity
-    ) -> bool:
+    def _passes_close_buy_conditions(self, coin: str, closed_candle: ClosedCandle, target_entity: TargetEntity) -> bool:
         rejection_reason = close_buy_rejection_reason(closed_candle, target_entity)
 
         if rejection_reason == "price_out_of_range":
@@ -199,9 +201,7 @@ class BatDaemon:
         await self._update_target_status(target_entity.target_coin, TargetStatus.CHECKING)
         self._dispatch_signal(target_entity, signal_type, current_price, event_reason)
 
-    def _dispatch_signal(
-        self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
-    ):
+    def _dispatch_signal(self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str):
         self._record_signal(target, signal_type, current_price, event_reason)
 
         if self.dry_run or not self.enable_graph:
@@ -277,5 +277,5 @@ async def main(user_id: str) -> None:
 
 
 if __name__ == "__main__":
-    user_id = "test_developer_001"
+    user_id = "8942621091"
     asyncio.run(main(user_id))

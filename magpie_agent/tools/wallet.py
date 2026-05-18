@@ -131,12 +131,14 @@ async def process_trade_execution(
 
     # 텔레그램 알림 메시지 구성
     total_price = price * volume
-    asset = wallet.assets.get(market)
-    holding_info = (
-        f"보유 코인({market}): {asset.volume:.4f} (평단: {asset.avg_buy_price:,.0f} 원)"
-        if asset
-        else f"보유 코인({market}): 0"
-    )
+
+    # 전체 보유 자산 목록 구성
+    assets_list = []
+    for coin, asset in wallet.assets.items():
+        if asset and asset.volume > 0:
+            assets_list.append(f"• {coin}: {asset.volume:.4f} (평단: {asset.avg_buy_price:,.0f} 원)")
+
+    holding_info = "\n".join(assets_list) if assets_list else "보유 코인 없음"
 
     notification_msg = (
         f"🚨 [매매 체결 알림]\n"
@@ -145,7 +147,7 @@ async def process_trade_execution(
         f"단가: {price:,.0f} 원\n"
         f"수량: {volume}\n"
         f"총액: {total_price:,.0f} 원\n\n"
-        f"💰 지갑 현황\n"
+        f"💰 전체 지갑 현황\n"
         f"보유 잔고: {wallet.balance:,.0f} 원\n"
         f"{holding_info}"
     )
