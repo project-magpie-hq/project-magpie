@@ -7,6 +7,7 @@ from langgraph.prebuilt import InjectedState
 
 from db.entity import StrategyEntity
 from db.mongo import strategies_collection
+from magpie_agent.agents.hawk_picker.schema import UpdateTargetCoinsInput
 from magpie_agent.agents.owl_director.schema import StrategySchema
 
 logger = logging.getLogger(__name__)
@@ -73,3 +74,44 @@ async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict 
     """사용자가 본인의 전략을 열람하기 원할 때 호출하여, 활성화된 전략을 보여줍니다."""
     strategy = await fetch_strategy_by_user(state["user_id"])
     return strategy
+
+
+@tool(args_schema=UpdateTargetCoinsInput)
+async def update_strategy_target_coins(
+    target_coins: list[str],
+    state: Annotated[dict, InjectedState],
+) -> str:
+    """
+    호크가 최종 선정한 타겟 코인 리스트를 전략에 업데이트합니다.
+    Hawk Picker가 차트 분석 후 최종 선정한 코인들을 전략에 반영할 때 호출합니다.
+    """
+    if state.get("current_sim_time"):
+        print("✅ [시뮬레이션] 타겟 코인이 가상 메모리에 성공적으로 업데이트되었습니다. (DB 저장 생략)")
+        return "타겟 코인 업데이트가 성공적으로 완료되었습니다."
+
+    user_id: str = state["user_id"]
+    now = datetime.datetime.now(datetime.UTC)
+
+    filter_query = {"user_id": user_id}
+    update_query = {
+        "$set": {
+            "target_coins": target_coins,
+            "updated_at": now,
+        }
+    }
+
+    print("\n" + "⚙️ " * 15)
+    try:
+        result = await strategies_collection.update_one(filter_query, update_query)
+    except Exception as e:
+        logger.exception("타겟 코인 업데이트 실패 (user_id: %s)", user_id)
+        raise RuntimeError("타겟 코인 업데이트 중 DB 오류가 발생했습니다.") from e
+
+    if result.modified_count > 0:
+        print(f"🪹 [The Nest]: 타겟 코인이 성공적으로 업데이트되었습니다! -> {target_coins}")
+    else:
+        print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
+    print("-" * 50)
+    print("⚙️ " * 15 + "\n")
+
+    return f"타겟 코인이 {target_coins}(으)로 성공적으로 업데이트되었습니다."

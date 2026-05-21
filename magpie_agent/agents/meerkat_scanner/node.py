@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.meerkat_scanner.chart_compressor import generate_chart_context
 from magpie_agent.agents.owl_director.schema import StrategySchema
 from magpie_agent.agents.utils import load_prompt, normalize_content
@@ -21,7 +22,30 @@ logger = logging.getLogger(__name__)
 
 
 async def meerkat_node(state: MagpieState) -> dict[str, Any]:
-    """차트 데이터를 분석하여 구체적인 타점을 계산하고 도구를 호출하는 노드"""
+    """차트 데이터를 분석하여 구체적인 타점을 계산하거나, 차트 분석 전용 리포트를 생성하는 노드"""
+
+    meerkat_mode = state.get("meerkat_mode")
+    is_chart_only = meerkat_mode == "chart_only"
+
+    sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
+
+    if is_chart_only:
+        print("\n🦦 [Meerkat]: 차트 분석 전용 모드로 실행합니다...")
+
+        target_coins: list[str] = state.get("hawk_candidates") or []
+
+        if not target_coins:
+            print("   ⚠️ [Meerkat]: State에 후보 코인 정보가 없어 분석을 중단합니다.")
+            return {"messages": []}
+
+        try:
+            chart_context = await generate_chart_context(target_coins, sim_time)
+        except Exception as e:
+            logger.exception("차트 컨텍스트 생성 실패: %s", target_coins)
+            raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
+
+        print("   ✅ [Meerkat]: 차트 분석 리포트를 생성했습니다.")
+        return {"messages": [AIMessage(content=chart_context)]}
 
     print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
 
@@ -42,8 +66,6 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
         return {"messages": []}
 
     strategy = StrategySchema.model_validate(current_strategy)
-
-    sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
 
     try:
         chart_context = await generate_chart_context(strategy.target_coins, sim_time)
@@ -124,3 +146,12 @@ def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
     except Exception as e:
         logger.exception("Meerkat LLM 초기화 실패")
         raise RuntimeError("Meerkat LLM 초기화 실패") from e
+
+
+def route_after_meerkat(state: MagpieState) -> str:
+    """Meerkat 실행 후 라우팅: 차트 분석 전용 모드면 hawk_picker로, 아니면 meerkat_tools로"""
+    meerkat_mode = state.get("meerkat_mode")
+    if meerkat_mode == "chart_only":
+        print("   🦦 [Meerkat]: 차트 분석 완료 → Hawk Picker의 최종 선정으로 이동")
+        return NodeNames.HAWK_PICKER.value
+    return NodeNames.MEERKAT_TOOLS.value
