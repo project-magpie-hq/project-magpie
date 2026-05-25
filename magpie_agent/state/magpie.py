@@ -6,6 +6,7 @@ from langgraph.graph import MessagesState
 
 class AgentEnum(StrEnum):
     MEERKAT = "meerkat_scanner"
+    HAWK = "hawk_picker"
 
 
 class MagpieState(MessagesState):
@@ -24,3 +25,8 @@ class MagpieState(MessagesState):
 
     # 실제 체결/주문 결과(향후 execution tool 연동용)
     execution_result: dict[str, Any] | None
+
+    # Hawk Picker: 1차 선정한 후보 코인 리스트 (Phase 1 → Meerkat chart-only 전달용)
+    hawk_candidates: list[str] | None
+    # Meerkat Scanner: 차트 분석 전용 모드 여부 ("chart_only" or None = 전체 타점 계산)
+    meerkat_mode: str | None
