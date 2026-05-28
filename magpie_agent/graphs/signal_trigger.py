@@ -6,7 +6,6 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from magpie_agent.agents.constant import NodeNames
-from magpie_agent.agents.owl_director.node import route_after_owl
 from magpie_agent.graphs.shared import (
     add_meerkat_and_tools,
     add_meerkat_tools_to_end,
@@ -26,15 +25,6 @@ def _signal_trigger_route_after_owl_tools(state: MagpieState) -> str:
     Hawk Picker로의 자동 라우팅을 수행하지 않습니다 (SignalTrigger에는 Hawk 노드가 없음).
     """
     return NodeNames.OWL_DIRECTOR.value
-
-
-def _signal_trigger_owl_routes() -> dict[str, str]:
-    """SignalTrigger 모드의 Owl 조건부 라우팅 맵."""
-    return {
-        NodeNames.OWL_TOOLS.value: NodeNames.OWL_TOOLS.value,
-        NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
-        END: END,
-    }
 
 
 def _signal_trigger_route_after_owl(state: MagpieState) -> str:
@@ -82,11 +72,14 @@ def build_signal_trigger_graph() -> CompiledStateGraph:
 
         add_start_to_owl_edge(workflow)
 
-        owl_routes = _signal_trigger_owl_routes()
         workflow.add_conditional_edges(
             NodeNames.OWL_DIRECTOR.value,
             _signal_trigger_route_after_owl,
-            owl_routes,
+            {
+                NodeNames.OWL_TOOLS.value: NodeNames.OWL_TOOLS.value,
+                NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
+                END: END,
+            },
         )
 
         workflow.add_conditional_edges(

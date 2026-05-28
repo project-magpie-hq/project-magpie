@@ -2,10 +2,9 @@ import logging
 
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import END, StateGraph
+from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.owl_director.node import route_after_owl_tools
 from magpie_agent.graphs.shared import (
     add_hawk_and_tools,

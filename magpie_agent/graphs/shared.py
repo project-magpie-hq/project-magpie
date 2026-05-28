@@ -76,7 +76,7 @@ def add_start_to_owl_edge(workflow):
 
 def add_owl_conditional_edges(workflow, owl_routes=None):
     """Add Owl's conditional routing edges.
-    
+
     Default routes: OWL_TOOLS, HAWK_PICKER, MEERKAT_SCANNER, END
     Pass owl_routes to override which destinations are available.
     """
