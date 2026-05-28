@@ -23,7 +23,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 
     system_prompt = load_prompt()
     if state.get("is_daily_review"):
-        additional_prompt = load_prompt("prompt_from_dawn.md")
+        additional_prompt = load_prompt("prompt_from_daily.md")
     elif state.get("from_daemon"):
         additional_prompt = load_prompt("prompt_from_daemon.md")
     else:

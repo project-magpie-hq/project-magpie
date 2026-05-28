@@ -33,7 +33,7 @@ def build_daily_report_graph() -> CompiledStateGraph:
 
     Common 그래프와 동일한 노드 구성을 가지지만,
     호출 시 `is_daily_review=True`를 상태에 설정하여
-    Owl이 정기 검진 전용 프롬프트(prompt_from_dawn.md)를 사용하도록 합니다.
+    Owl이 정기 검진 전용 프롬프트(prompt_from_daily.md)를 사용하도록 합니다.
 
     Flow: Owl(daily prompt) → (전략 수정시: register_strategy → Hawk → Meerkat)
                               / (불필요시: transfer_to_meerkat)
