@@ -9,6 +9,7 @@ from db.entity import StrategyEntity
 from db.mongo import strategies_collection
 from magpie_agent.agents.hawk_picker.schema import UpdateTargetCoinsInput
 from magpie_agent.agents.owl_director.schema import StrategySchema
+from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +46,27 @@ async def register_strategy_to_nest(
 
     if result.upserted_id:
         print(f"🪹 [The Nest]: 새로운 전략이 DB에 등록되었습니다! ID: {result.upserted_id}")
+        await send_telegram_message(
+            chat_id=user_id,
+            text=(
+                "🦉 [전략 등록]\n"
+                f"새로운 투자 전략이 등록되었습니다.\n"
+                f"• 대상 코인: {', '.join(strategy_entity.target_coins) if strategy_entity.target_coins else '미정'}\n"
+                f"• 전략 개요: Hawk Picker가 종목을 선정하고 Meerkat이 타점을 계산합니다."
+            ),
+        )
     else:
         print("🪹 [The Nest]: 기존 전략이 성공적으로 업데이트(수정)되었습니다!")
+        await send_telegram_message(
+            chat_id=user_id,
+            text=(
+                "🦉 [전략 변경]\n"
+                f"기존 전략이 업데이트되었습니다.\n"
+                f"• 대상 코인: {', '.join(strategy_entity.target_coins) if strategy_entity.target_coins else '미정'}\n"
+                f"• 변경된 전략 세부사항이 DB에 반영되었습니다.\n"
+                f"• Hawk Picker와 Meerkat Scanner가 새로운 전략으로 분석을 시작합니다."
+            ),
+        )
     print("-" * 50)
     print("⚙️ " * 15 + "\n")
 
@@ -109,6 +129,15 @@ async def update_strategy_target_coins(
 
     if result.modified_count > 0:
         print(f"🪹 [The Nest]: 타겟 코인이 성공적으로 업데이트되었습니다! -> {target_coins}")
+        await send_telegram_message(
+            chat_id=user_id,
+            text=(
+                "🦅 [종목 변경]\n"
+                f"Hawk Picker가 최종 종목을 선정하여 전략에 반영했습니다.\n"
+                f"• 선정 종목: {', '.join(target_coins)}\n"
+                f"• Meerkat Scanner가 위 종목들의 타점을 계산 중입니다."
+            ),
+        )
     else:
         print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
     print("-" * 50)
