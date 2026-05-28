@@ -12,7 +12,7 @@ from bat_daemon.signals.rules import close_buy_rejection_reason, is_touch_buy_si
 from bat_daemon.stores.target_store import fetch_target_map, update_target_status
 from db.entity import TargetEntity
 from magpie_agent.agents.meerkat_scanner.schema import TargetStatus
-from magpie_agent.graphs.bat_echo import build_bat_echo_graph
+from magpie_agent.graphs.signal_trigger import build_signal_trigger_graph
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class BatDaemon:
         self.watching_coins: set[str] = set()
         self.ws_connection: Any = None
         self.current_candles: dict[str, dict[str, Any]] = {}
-        self.magpie_graph = build_bat_echo_graph() if enable_graph and not dry_run else None
+        self.magpie_graph = build_signal_trigger_graph() if enable_graph and not dry_run else None
         self.graph_tasks: set[asyncio.Task] = set()
         self.signal_history: list[dict[str, Any]] = []
         self.current_event_time: str | None = None

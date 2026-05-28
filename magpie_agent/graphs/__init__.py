@@ -1,9 +1,9 @@
-from magpie_agent.graphs.bat_echo import build_bat_echo_graph
-from magpie_agent.graphs.dawn_patrol import build_dawn_patrol_graph
-from magpie_agent.graphs.nest_forge import build_nest_forge_graph
+from magpie_agent.graphs.common import build_common_graph
+from magpie_agent.graphs.daily_report import build_daily_report_graph
+from magpie_agent.graphs.signal_trigger import build_signal_trigger_graph
 
 __all__ = [
-    "build_nest_forge_graph",
-    "build_bat_echo_graph",
-    "build_dawn_patrol_graph",
+    "build_common_graph",
+    "build_signal_trigger_graph",
+    "build_daily_report_graph",
 ]

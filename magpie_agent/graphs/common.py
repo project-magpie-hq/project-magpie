@@ -26,13 +26,13 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-def build_nest_forge_graph() -> CompiledStateGraph:
-    """
-    NestForge: 사용자 인터랙션 전용 그래프
-    
+def build_common_graph() -> CompiledStateGraph:
+    """사용자 인터랙션 전용 그래프.
+
     사용자와 Owl Director가 대화하며 전략을 생성/수정하고,
     Hawk Picker가 종목을 선정하며, Meerkat Scanner가 타점을 계산합니다.
     전체 수직적 플로우 (Owl → Hawk → Meerkat)를 모두 포함합니다.
+    from_daemon=False, is_daily_review=False 기본값으로 실행됩니다.
     """
     try:
         workflow = StateGraph(MagpieState)
@@ -53,5 +53,5 @@ def build_nest_forge_graph() -> CompiledStateGraph:
         return workflow.compile(checkpointer=memory)
 
     except Exception as e:
-        logger.exception("NestForge 그래프 빌드 중 오류가 발생했습니다.")
-        raise RuntimeError("NestForge 그래프 빌드 실패") from e
+        logger.exception("Common 그래프 빌드 중 오류가 발생했습니다.")
+        raise RuntimeError("Common 그래프 빌드 실패") from e
