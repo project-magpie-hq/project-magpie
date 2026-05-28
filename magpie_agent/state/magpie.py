@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any, NotRequired
+from typing import Any
 
 from langgraph.graph import MessagesState
 
@@ -19,7 +19,7 @@ class MagpieState(MessagesState):
     # Daemon으로부터 불렀는지, 사용자가 불렀는지 구분하는 플래그 변수
     from_daemon: bool
     # 매일 오전 9시 정기 검진(DailyReport) 모드 플래그
-    is_daily_review: NotRequired[bool]
+    is_daily_review: bool | None
     # Owl이 다음 Agent를 누구를 부를지 결정하는 변수
     next_agent: AgentEnum | None
     # 에이전트가 실행될 특정 시점
