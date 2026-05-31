@@ -22,9 +22,12 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     print("\n\n🦉 [Owl]: 사용자의 요청을 분석하고 있습니다...")
 
     system_prompt = load_prompt()
-    additional_prompt = (
-        load_prompt("prompt_from_daemon.md") if state.get("from_daemon") else load_prompt("prompt_from_user.md")
-    )
+    if state.get("is_daily_review"):
+        additional_prompt = load_prompt("prompt_from_daily.md")
+    elif state.get("from_daemon"):
+        additional_prompt = load_prompt("prompt_from_daemon.md")
+    else:
+        additional_prompt = load_prompt("prompt_from_user.md")
 
     injected_prompt = system_prompt + additional_prompt
 
