@@ -16,6 +16,7 @@ from magpie_agent.tools.monitor_target import (
     register_monitoring_targets_to_nest,
 )
 from magpie_agent.tools.strategy import fetch_strategy_by_user
+from magpie_agent.tools.trade_history import fetch_recent_trade_history_by_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,24 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
             {current_wallet.model_dump_json(indent=2)}
         """
 
+    recent_trades = await fetch_recent_trade_history_by_user(state["user_id"], limit=12)
+    if recent_trades:
+        trade_summaries = [
+            {
+                "market": trade.market,
+                "signal": trade.signal.value if hasattr(trade.signal, "value") else trade.signal,
+                "price": trade.price,
+                "volume": trade.volume,
+                "total_price": trade.total_price,
+                "updated_at": trade.updated_at.isoformat(),
+            }
+            for trade in recent_trades
+        ]
+        user_input += f"""
+            [최근 매매 기록]
+            {trade_summaries}
+        """
+
     # 2. 현재 등록된 타점 정보 추가
     existing_targets = await fetch_monitoring_targets_by_user(state["user_id"])
     if existing_targets:
@@ -111,6 +130,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
                     "buy_price_lower_limit": t.get("buy_price_lower_limit"),
                     "take_profit_price": t.get("take_profit_price"),
                     "stop_loss_price": t.get("stop_loss_price"),
+                    "buy_allocation_pct": t.get("buy_allocation_pct"),
                 }
             )
 
