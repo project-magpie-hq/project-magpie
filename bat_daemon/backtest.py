@@ -57,12 +57,13 @@ async def _load_historical_data(coins: set[str], start: str, end: str) -> dict[s
     return historical_data
 
 
-async def run_backtest(user_id: str, start: str, end: str) -> None:
-    bat = BatDaemon(user_id, dry_run=True, enable_graph=False)
+async def run_backtest(user_id: str, start: str, end: str, wallet_user_id: str | None = None) -> None:
+    bat = BatDaemon(user_id, wallet_user_id=wallet_user_id, dry_run=True, enable_graph=False)
 
     print("=" * 60)
     print("🧪 Project Magpie: Bat 백테스트 시작")
     print(f"👤 user_id: {user_id}")
+    print(f"👛 wallet_user_id: {wallet_user_id or user_id}")
     print(f"📅 기간: {start} ~ {end}")
     print("=" * 60)
 
@@ -97,6 +98,8 @@ async def run_backtest(user_id: str, start: str, end: str) -> None:
     print("\n🏁 백테스트 종료")
     print(f"   처리한 가상 틱: {processed_ticks:,}개")
     print(f"   감지된 신호: {len(bat.signal_history):,}개")
+    if bat.simulated_wallet is not None:
+        print(f"   최종 시뮬레이션 잔고: {bat.simulated_wallet.balance:,.0f} KRW")
 
     if not bat.signal_history:
         print("   조건을 만족한 매수/매도 신호가 없습니다.")
@@ -107,12 +110,19 @@ async def run_backtest(user_id: str, start: str, end: str) -> None:
         print(
             f"   - [{signal.get('event_time')}] {signal['target_coin']} {signal['signal_type']} "
             f"@ {signal['price']:,.0f}원 ({signal['event_reason']}) -> {signal.get('result_status', '-')}"
+            f" / volume={signal.get('executed_volume', '-')}"
+            f" / balance={signal.get('simulated_balance', '-')}"
         )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="DB monitoring target을 과거 업비트 1시간 캔들로 백테스트합니다.")
     parser.add_argument("--user-id", default="test_developer_001", help="monitoring_targets를 조회할 user_id")
+    parser.add_argument(
+        "--wallet-user-id",
+        default=None,
+        help="시뮬레이션에 사용할 wallets 조회 user_id. 미지정 시 --user-id와 동일",
+    )
     parser.add_argument("--start", required=True, help="시작 일시. 예: '2024-01-01 00:00:00'")
     parser.add_argument("--end", required=True, help="종료 일시. 예: '2024-02-01 00:00:00'")
     return parser.parse_args()
@@ -120,7 +130,7 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = parse_args()
-    await run_backtest(args.user_id, args.start, args.end)
+    await run_backtest(args.user_id, args.start, args.end, args.wallet_user_id)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ def init_session_state() -> None:
     defaults: dict[str, Any] = {
         "history": [],
         "user_id": "test_developer_001",
+        "wallet_user_id": "test_developer_001",
         "thread_id": "dashboard_session_001",
         "bat_target_snapshot": None,
         "bat_live_result": None,

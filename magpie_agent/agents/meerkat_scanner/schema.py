@@ -31,6 +31,15 @@ class TargetSchema(BaseModel):
     # [가격 조건 - 매도]
     take_profit_price: float = Field(description="익절 목표가")
     stop_loss_price: float = Field(description="손절 방어선")
+    buy_allocation_pct: float = Field(
+        default=0.01,
+        ge=0.01,
+        le=1.0,
+        description=(
+            "매수 시 현재 원화 잔고의 몇 퍼센트를 투입할지 나타내는 비율. "
+            "예: 0.15 = 15%. 기존 DB 문서와의 하위 호환 기본값은 0.01(1%)."
+        ),
+    )
     # [캔들 조건]
     trigger_basis: TriggerBasis = Field(
         description="TOUCH는 꼬리 도달 시 즉시 체결, CLOSE는 1시간 캔들 종가 확정 시 체결"

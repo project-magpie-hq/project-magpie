@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Magpie Flow Dashboard</title>
+  <style>
+    html {
+      font-size: 15px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    :root {
+      --bg: #f4efe6;
+      --panel: #fffaf2;
+      --panel-strong: #f7e8cc;
+      --ink: #1f2937;
+      --muted: #5b6472;
+      --line: #d7c7ab;
+      --accent: #cb6b2d;
+      --accent-soft: #f7c88c;
+      --accent-2: #1d6f5f;
+      --danger: #a63a2b;
+      --ok: #2f7d4a;
+      --shadow: 0 18px 48px rgba(62, 45, 22, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "SUIT Variable", "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      color: var(--ink);
+      line-height: 1.6;
+      word-break: keep-all;
+      background:
+        radial-gradient(circle at top left, rgba(247, 200, 140, 0.55), transparent 28%),
+        radial-gradient(circle at top right, rgba(29, 111, 95, 0.13), transparent 24%),
+        linear-gradient(180deg, #f7f1e8 0%, #f2ecdf 100%);
+    }
+
+    .shell {
+      width: min(1440px, calc(100vw - 40px));
+      margin: 20px auto 40px;
+      position: relative;
+    }
+
+    .hero {
+      padding: 24px 26px;
+      border: 1px solid rgba(203, 107, 45, 0.16);
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(255, 250, 242, 0.98), rgba(247, 232, 204, 0.92));
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(1.75rem, 3.3vw, 2.7rem);
+      line-height: 1.18;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 900px;
+      color: var(--muted);
+      line-height: 1.68;
+      font-size: 0.96rem;
+    }
+
+    .hero-grid,
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-top: 20px;
+      align-items: stretch;
+    }
+
+    .metric,
+    .panel,
+    .legend-item,
+    .note,
+    .scenario,
+    .matrix table,
+    .tab-button,
+    .graph-visual,
+    .graph-path-card {
+      border: 1px solid var(--line);
+      background: rgba(255, 250, 242, 0.9);
+      box-shadow: var(--shadow);
+    }
+
+    .metric,
+    .panel,
+    .note,
+    .scenario,
+    .graph-visual,
+    .graph-path-card {
+      border-radius: 18px;
+      padding: 16px 18px;
+    }
+
+    .metric small,
+    .eyebrow,
+    .source-list,
+    .subtle,
+    .tab-copy,
+    .graph-caption {
+      color: var(--muted);
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 1.25rem;
+      line-height: 1.35;
+      color: var(--accent);
+    }
+
+    .metric {
+      min-height: 136px;
+    }
+
+    .section {
+      margin-top: 20px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: 1.12rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section p {
+      margin-top: 0;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: stretch;
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: stretch;
+    }
+
+    .flow-stack {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .graph-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .graph-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .graph-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255, 250, 242, 0.86);
+    }
+
+    .graph-card h3,
+    .graph-visual h3,
+    .graph-path-card h3 {
+      margin: 0 0 6px;
+      font-size: 0.94rem;
+      letter-spacing: -0.01em;
+    }
+
+    .graph-card p,
+    .graph-visual p,
+    .graph-path-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.55;
+    }
+
+    .graph-meta {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--ink);
+    }
+
+    .panel h3,
+    .scenario h3,
+    .note h3 {
+      margin: 0 0 10px;
+      font-size: 0.98rem;
+      letter-spacing: -0.01em;
+    }
+
+    .panel p,
+    .panel li,
+    .scenario li,
+    .note li,
+    .matrix td,
+    .matrix th {
+      line-height: 1.58;
+      font-size: 0.94rem;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    code {
+      font-family: "SFMono-Regular", "SF Mono", Consolas, monospace;
+      background: rgba(203, 107, 45, 0.1);
+      padding: 0.08rem 0.32rem;
+      border-radius: 6px;
+      color: #8d4317;
+      font-size: 0.92em;
+    }
+
+    .tabs {
+      margin-top: 20px;
+    }
+
+    .tab-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .tab-button {
+      border-radius: 999px;
+      padding: 10px 14px;
+      color: var(--ink);
+      cursor: pointer;
+      transition: 160ms ease;
+      font-size: 0.92rem;
+      font-family: inherit;
+    }
+
+    .tab-button strong {
+      display: block;
+      font-size: 0.96rem;
+      margin-bottom: 2px;
+    }
+
+    .tab-button:hover,
+    .tab-button.active {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      background: var(--panel-strong);
+      color: #7f3d14;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .layout-with-sidebar {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .scenario-sidebar {
+      position: sticky;
+      top: 20px;
+      z-index: 30;
+      width: 236px;
+      margin-right: auto;
+      padding: 14px 14px 12px;
+      border: 1px solid rgba(203, 107, 45, 0.18);
+      border-radius: 18px;
+      background: rgba(255, 250, 242, 0.88);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(62, 45, 22, 0.08);
+      align-self: start;
+    }
+
+    .scenario-sidebar h3 {
+      margin: 0 0 8px;
+      font-size: 0.98rem;
+      letter-spacing: -0.02em;
+    }
+
+    .scenario-sidebar p {
+      margin: 0 0 12px;
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .scenario-picker {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .scenario-picker button {
+      border: 1px solid rgba(203, 107, 45, 0.24);
+      background: rgba(255, 250, 242, 0.95);
+      border-radius: 999px;
+      padding: 9px 11px;
+      color: var(--ink);
+      cursor: pointer;
+      transition: 160ms ease;
+      font-size: 0.86rem;
+      line-height: 1.35;
+      font-family: inherit;
+      text-align: left;
+    }
+
+    .scenario-picker button:hover,
+    .scenario-picker button.active {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      background: var(--panel-strong);
+      color: #7f3d14;
+    }
+
+    .diagram,
+    .mini-diagram {
+      overflow: auto;
+      padding: 12px;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 250, 242, 0.92), rgba(248, 237, 217, 0.92)),
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 59px,
+          rgba(203, 107, 45, 0.03) 60px
+        );
+      border: 1px solid var(--line);
+    }
+
+    svg {
+      width: 100%;
+      min-width: 760px;
+      height: auto;
+    }
+
+    .mini-diagram svg {
+      min-width: 320px;
+    }
+
+    .node rect,
+    .node path,
+    .mini-node rect {
+      fill: #fffdf8;
+      stroke: #bfa57f;
+      stroke-width: 2;
+      transition: 180ms ease;
+    }
+
+    .node text,
+    .mini-node text {
+      fill: var(--ink);
+      font-size: 12.5px;
+      font-weight: 630;
+      letter-spacing: -0.02em;
+    }
+
+    .mini-node text {
+      font-size: 11px;
+    }
+
+    .node .small,
+    .mini-node .small {
+      font-size: 9.8px;
+      font-weight: 520;
+      fill: var(--muted);
+    }
+
+    .node .tiny {
+      font-size: 8.8px;
+      font-weight: 520;
+      fill: var(--muted);
+    }
+
+    .edge,
+    .mini-edge {
+      stroke: #bca98d;
+      stroke-width: 3;
+      fill: none;
+      marker-end: url(#arrow);
+      transition: 180ms ease;
+    }
+
+    .mini-edge {
+      stroke-width: 2.6;
+      marker-end: url(#mini-arrow);
+    }
+
+    .edge.dashed,
+    .mini-edge.dashed {
+      stroke-dasharray: 9 8;
+    }
+
+    .node.active rect,
+    .node.active path {
+      fill: #fff0d8;
+      stroke: var(--accent);
+      stroke-width: 3;
+    }
+
+    .node.store rect,
+    .mini-node.store rect {
+      fill: #eef7f4;
+      stroke: #3d8d7d;
+    }
+
+    .node.signal rect,
+    .mini-node.signal rect {
+      fill: #fff0ef;
+      stroke: #c96b61;
+    }
+
+    .node.active.store rect,
+    .node.active.signal rect {
+      stroke: var(--accent);
+    }
+
+    .edge.active {
+      stroke: var(--accent);
+      stroke-width: 4.5;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .legend-item {
+      border-radius: 999px;
+      padding: 7px 10px;
+      box-shadow: none;
+      font-size: 0.84rem;
+    }
+
+    .legend-item span {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+
+    .badge.ok {
+      background: rgba(47, 125, 74, 0.12);
+      color: var(--ok);
+    }
+
+    .badge.warn {
+      background: rgba(166, 58, 43, 0.1);
+      color: var(--danger);
+    }
+
+    .graph-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .graph-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      background: rgba(29, 111, 95, 0.08);
+      color: var(--accent-2);
+      border: 1px solid rgba(29, 111, 95, 0.18);
+    }
+
+    .matrix-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .matrix-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(255, 250, 242, 0.82);
+    }
+
+    .matrix-card h3 {
+      margin: 0 0 6px;
+      font-size: 0.9rem;
+      letter-spacing: -0.01em;
+    }
+
+    .matrix-card p {
+      margin: 0;
+      font-size: 0.86rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .footnotes {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .source-list {
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+
+    .source-list li {
+      margin-bottom: 6px;
+    }
+
+    .main-content,
+    .tab-panel > section,
+    .grid.two > *,
+    .grid.three > * {
+      min-width: 0;
+    }
+
+    .panel,
+    .scenario,
+    .note,
+    .metric {
+      height: 100%;
+    }
+
+    @media (max-width: 1240px) {
+      .hero-grid,
+      .graph-grid,
+      .graph-card-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .grid.three {
+        grid-template-columns: 1fr;
+      }
+
+      .matrix-cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .layout-with-sidebar,
+      .grid.two,
+      .graph-grid,
+      .graph-card-grid,
+      .footnotes {
+        grid-template-columns: 1fr;
+      }
+
+      .shell {
+        width: min(100vw - 18px, 1400px);
+      }
+
+      .scenario-sidebar {
+        position: static;
+        width: auto;
+        margin: 0 0 18px;
+        order: -1;
+      }
+
+      .matrix-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      html {
+        font-size: 14px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tab-list {
+        display: grid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="eyebrow">Project Magpie / Execution Flow Dashboard</div>
+      <h1>Magpie Agent Manual</h1>
+      <p>
+        이 문서는 현재 워크스페이스의 실제 코드 경로를 기준으로 작성되었습니다.
+        사용자 실행 엔트리포인트는 <code>magpie_agent/run.py</code>, 시그널 감시 엔트리포인트는
+        <code>bat_daemon/run.py</code>입니다. 요청에 언급된 <code>daemon/bat_daemon.py</code>는
+        현재 저장소에는 없고, 실제 <code>BatDaemon</code> 구현은 <code>bat_daemon/run.py</code> 안에 있습니다.
+      </p>
+
+      <div class="hero-grid">
+        <div class="metric">
+          <small>Entry Point A</small>
+          <strong><code>magpie_agent/run.py</code></strong>
+          텔레그램 메시지를 받아 Owl/Hawk/Meerkat 그래프를 실행
+        </div>
+        <div class="metric">
+          <small>Entry Point B</small>
+          <strong><code>bat_daemon/run.py</code></strong>
+          업비트 1시간 캔들을 실시간 감시하고 신호 도달 시 직접 체결 후 EXPIRED 타점만 다시 갱신
+        </div>
+        <div class="metric">
+          <small>Shared DB</small>
+          <strong>The Nest</strong>
+          <code>strategies</code>, <code>monitoring_targets</code>, <code>wallets</code>, <code>trade_history</code>
+        </div>
+        <div class="metric">
+          <small>Agent Chain</small>
+          <strong>Owl → Hawk → Meerkat</strong>
+          Daemon은 직접 체결하고 EXPIRED 타점 재계산 시에만 refresh 그래프를 호출
+        </div>
+      </div>
+    </section>
+
+    <section class="tabs" aria-label="문서 탭">
+      <div class="tab-list" role="tablist">
+        <button class="tab-button active" role="tab" aria-selected="true" aria-controls="tab-flow" id="tab-button-flow" data-tab="flow">
+          <strong>실행 플로우</strong>
+          <span class="tab-copy">실행 경로와 시나리오 하이라이트</span>
+        </button>
+        <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab-graph" id="tab-button-graph" data-tab="graph">
+          <strong>그래프</strong>
+          <span class="tab-copy">builder별 구조와 시각화</span>
+        </button>
+        <button class="tab-button" role="tab" aria-selected="false" aria-controls="tab-notes" id="tab-button-notes" data-tab="notes">
+          <strong>데이터 · 메모</strong>
+          <span class="tab-copy">엔티티 관계, 조건, 검증 메모</span>
+        </button>
+      </div>
+
+      <div id="tab-flow" class="tab-panel active" role="tabpanel" aria-labelledby="tab-button-flow">
+        <div class="layout-with-sidebar">
+          <aside class="scenario-sidebar">
+            <h3>시나리오 하이라이트</h3>
+            <p>버튼을 누르면 두 개의 실행 다이어그램에서 핵심 경로만 바로 강조됩니다.</p>
+            <div class="scenario-picker">
+              <button class="active" data-scenario="reset">전체 보기</button>
+              <button data-scenario="user-strategy">사용자: 전략 등록 후 전체 분석</button>
+              <button data-scenario="user-wallet">사용자: 지갑/전략 조회</button>
+              <button data-scenario="daemon-buy">Daemon: 매수 신호 발생</button>
+              <button data-scenario="daemon-sell">Daemon: 익절/손절 신호 발생</button>
+              <button data-scenario="daemon-close">Daemon: CLOSE 조건 매수</button>
+            </div>
+          </aside>
+
+          <main class="main-content">
+            <section class="section flow-stack">
+              <div class="panel">
+                <div class="section-head">
+                  <h2><code>magpie_agent/run.py</code> 실행 플로우</h2>
+                  <span class="badge ok">사용자 주도</span>
+                </div>
+                <div class="diagram">
+                  <svg viewBox="0 0 1240 760" aria-label="Magpie Agent Flow">
+                    <defs>
+                      <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+
+                    <path id="edge-user-1" class="edge" d="M140 110 C220 110, 220 110, 300 110"></path>
+                    <path id="edge-user-2" class="edge" d="M460 110 C530 110, 530 110, 600 110"></path>
+                    <path id="edge-user-3" class="edge dashed" d="M760 110 C830 110, 830 70, 910 70"></path>
+                    <path id="edge-user-4" class="edge" d="M760 110 C830 110, 830 170, 910 170"></path>
+                    <path id="edge-user-5" class="edge" d="M1090 70 C1140 70, 1140 70, 1180 70"></path>
+                    <path id="edge-user-6" class="edge" d="M1090 170 C1140 170, 1140 170, 1180 170"></path>
+                    <path id="edge-user-7" class="edge" d="M1020 170 C1020 240, 1020 240, 1020 280"></path>
+                    <path id="edge-user-8" class="edge" d="M1020 440 C1020 500, 1020 500, 1020 545"></path>
+                    <path id="edge-user-9" class="edge dashed" d="M990 216 C930 216, 930 248, 700 320"></path>
+                    <path id="edge-user-10" class="edge dashed" d="M990 216 C930 216, 930 330, 700 430"></path>
+                    <path id="edge-user-11" class="edge dashed" d="M860 600 C780 600, 780 600, 700 600"></path>
+                    <path id="edge-user-12" class="edge dashed" d="M1020 595 C1020 655, 1020 655, 1020 690"></path>
+                    <path id="edge-user-13" class="edge dashed" d="M1100 440 C1135 440, 1135 320, 700 320"></path>
+                    <path id="edge-user-14" class="edge" d="M940 703 C880 703, 880 703, 700 703"></path>
+
+                    <g id="node-user-start" class="node">
+                      <rect x="30" y="60" rx="20" ry="20" width="110" height="100"></rect>
+                      <text x="85" y="105" text-anchor="middle">Telegram</text>
+                      <text x="85" y="128" class="small" text-anchor="middle">message input</text>
+                    </g>
+
+                    <g id="node-user-run" class="node">
+                      <rect x="300" y="56" rx="20" ry="20" width="160" height="108"></rect>
+                      <text x="380" y="101" text-anchor="middle">run.py</text>
+                      <text x="380" y="124" class="small" text-anchor="middle">build_graph()</text>
+                      <text x="380" y="144" class="small" text-anchor="middle">app.astream(...)</text>
+                    </g>
+
+                    <g id="node-user-owl" class="node">
+                      <rect x="600" y="56" rx="20" ry="20" width="160" height="108"></rect>
+                      <text x="680" y="98" text-anchor="middle">Owl Director</text>
+                      <text x="680" y="121" class="small" text-anchor="middle">LLM + prompt_from_user</text>
+                      <text x="680" y="141" class="small" text-anchor="middle">tool or reply</text>
+                    </g>
+
+                    <g id="node-user-end" class="node signal">
+                      <rect x="930" y="24" rx="20" ry="20" width="160" height="92"></rect>
+                      <text x="1010" y="64" text-anchor="middle">사용자 응답</text>
+                      <text x="1010" y="87" class="small" text-anchor="middle">tool call 없으면 종료</text>
+                    </g>
+
+                    <g id="node-user-owltools" class="node">
+                      <rect x="930" y="124" rx="20" ry="20" width="160" height="92"></rect>
+                      <text x="1010" y="164" text-anchor="middle">Owl Tools</text>
+                      <text x="1010" y="187" class="small" text-anchor="middle">strategy / wallet / trade</text>
+                    </g>
+
+                    <g id="node-user-hawk" class="node">
+                      <rect x="950" y="280" rx="20" ry="20" width="170" height="100"></rect>
+                      <text x="1035" y="321" text-anchor="middle">Hawk Picker</text>
+                      <text x="1035" y="345" class="small" text-anchor="middle">Phase 1 or Phase 2</text>
+                    </g>
+
+                    <g id="node-user-hawktools" class="node store">
+                      <rect x="950" y="390" rx="20" ry="20" width="170" height="100"></rect>
+                      <text x="1035" y="432" text-anchor="middle">Hawk Tools</text>
+                      <text x="1035" y="455" class="small" text-anchor="middle">store / update targets</text>
+                    </g>
+
+                    <g id="node-user-meerkat" class="node">
+                      <rect x="840" y="535" rx="20" ry="20" width="360" height="120"></rect>
+                      <text x="1020" y="578" text-anchor="middle">Meerkat Scanner</text>
+                      <text x="1020" y="603" class="small" text-anchor="middle">chart_only면 리포트만 생성한 뒤</text>
+                      <text x="1020" y="622" class="small" text-anchor="middle">Hawk로 복귀</text>
+                      <text x="1020" y="642" class="small" text-anchor="middle">full timing이면 최종 타점 계산 후 tool 강제 호출</text>
+                    </g>
+
+                    <g id="node-user-meerkattools" class="node store">
+                      <rect x="930" y="690" rx="20" ry="20" width="180" height="42"></rect>
+                      <text x="1020" y="716" class="small" text-anchor="middle">monitoring_targets 저장</text>
+                    </g>
+
+                    <g id="node-db-strategy" class="node store">
+                      <rect x="500" y="272" rx="20" ry="20" width="200" height="96"></rect>
+                      <text x="600" y="312" text-anchor="middle">DB: strategies</text>
+                      <text x="600" y="335" class="small" text-anchor="middle">Owl 저장/조회</text>
+                      <text x="600" y="355" class="small" text-anchor="middle">Hawk가 target_coins 갱신</text>
+                    </g>
+
+                    <g id="node-db-wallet" class="node store">
+                      <rect x="500" y="382" rx="20" ry="20" width="200" height="96"></rect>
+                      <text x="600" y="422" text-anchor="middle">DB: wallets</text>
+                      <text x="600" y="445" class="small" text-anchor="middle">assets + trade_stats</text>
+                      <text x="600" y="465" class="small" text-anchor="middle">trade_history는 체결 시 추가 기록</text>
+                    </g>
+
+                    <g id="node-db-targets" class="node store">
+                      <rect x="500" y="552" rx="20" ry="20" width="200" height="102"></rect>
+                      <text x="600" y="595" text-anchor="middle">DB: monitoring_targets</text>
+                      <text x="600" y="618" class="small" text-anchor="middle">Meerkat 최종 타점 저장</text>
+                      <text x="600" y="638" class="small" text-anchor="middle">BatDaemon이 이후 감시</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="legend">
+                  <div class="legend-item"><span style="background:#cb6b2d"></span>현재 선택한 시나리오의 핵심 경로</div>
+                  <div class="legend-item"><span style="background:#3d8d7d"></span>DB 저장/조회 노드</div>
+                  <div class="legend-item"><span style="background:#c96b61"></span>종료 또는 외부 응답 노드</div>
+                </div>
+              </div>
+
+              <div class="scenario" id="scenario-user">
+                <div class="section-head">
+                  <h2>사용자 그래프 핵심 분기</h2>
+                  <span class="badge ok">공통 그래프</span>
+                </div>
+                <h3>Owl Director</h3>
+                <ul>
+                  <li>도구 호출이 없으면 바로 종료하고 텔레그램으로 일반 답변을 보냅니다.</li>
+                  <li><code>transfer_to_agent(hawk_picker)</code>이면 Hawk로 넘어갑니다.</li>
+                  <li><code>transfer_to_agent(meerkat_scanner)</code>이면 Meerkat로 바로 넘어갑니다.</li>
+                  <li>그 외 <code>register_strategy_to_nest</code>, <code>get_my_active_strategy</code>, <code>get_wallet</code>, <code>process_trade_execution</code>는 Owl Tools에서 실행되고, 완료 후 다시 Owl로 돌아갑니다.</li>
+                </ul>
+                <h3>Hawk Picker</h3>
+                <ul>
+                  <li>Phase 1: 전략을 읽어 후보 코인을 고르고 <code>store_hawk_candidates</code>를 호출하면 <code>meerkat_mode="chart_only"</code>가 설정됩니다.</li>
+                  <li>Phase 2: Meerkat 차트 분석 결과를 바탕으로 <code>update_strategy_target_coins</code>를 호출하고 다시 Meerkat full timing 단계로 넘깁니다.</li>
+                </ul>
+                <h3>Meerkat Scanner</h3>
+                <ul>
+                  <li><code>chart_only</code>면 DB 쓰기 없이 차트 리포트만 만들고 Hawk에 되돌려 최종 종목을 고르게 합니다.</li>
+                  <li>full timing이면 전략, 현재 지갑, 최근 매매 기록, 기존 타점 정보를 모두 읽고 최종 타점과 <code>buy_allocation_pct</code>를 계산한 뒤 <code>register_monitoring_targets_to_nest</code>를 실행합니다.</li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="section flow-stack">
+              <div class="panel">
+                <div class="section-head">
+                  <h2><code>bat_daemon/run.py</code> 실행 플로우</h2>
+                  <span class="badge warn">실시간 감시</span>
+                </div>
+                <div class="diagram">
+                  <svg viewBox="0 0 1240 930" aria-label="Bat Daemon Flow">
+                    <defs>
+                      <marker id="arrow-daemon" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+
+                    <path id="edge-daemon-1" class="edge" style="marker-end:url(#arrow-daemon)" d="M120 110 C220 110, 220 110, 320 110"></path>
+                    <path id="edge-daemon-2" class="edge" style="marker-end:url(#arrow-daemon)" d="M460 110 C560 110, 560 110, 660 110"></path>
+                    <path id="edge-daemon-3" class="edge" style="marker-end:url(#arrow-daemon)" d="M780 110 C900 110, 900 100, 1020 100"></path>
+                    <path id="edge-daemon-4" class="edge" style="marker-end:url(#arrow-daemon)" d="M780 110 C900 110, 900 220, 1020 220"></path>
+                    <path id="edge-daemon-5" class="edge" style="marker-end:url(#arrow-daemon)" d="M1090 220 C1090 290, 1090 290, 1090 348"></path>
+                    <path id="edge-daemon-6" class="edge" style="marker-end:url(#arrow-daemon)" d="M1090 492 C1090 548, 1090 548, 1090 606"></path>
+                    <path id="edge-daemon-7" class="edge dashed" style="marker-end:url(#arrow-daemon)" d="M1020 666 C930 666, 930 666, 840 666"></path>
+                    <path id="edge-daemon-8" class="edge" style="marker-end:url(#arrow-daemon)" d="M720 666 C630 666, 630 666, 540 666"></path>
+                    <path id="edge-daemon-9" class="edge" style="marker-end:url(#arrow-daemon)" d="M420 666 C335 666, 335 666, 250 666"></path>
+                    <path id="edge-daemon-10" class="edge" style="marker-end:url(#arrow-daemon)" d="M1090 736 C1090 800, 1090 800, 1090 850"></path>
+                    <path id="edge-daemon-11" class="edge dashed" style="marker-end:url(#arrow-daemon)" d="M840 420 C760 420, 760 540, 760 606"></path>
+
+                    <g id="node-daemon-start" class="node">
+                      <rect x="30" y="55" rx="20" ry="20" width="90" height="110"></rect>
+                      <text x="75" y="103" text-anchor="middle">main()</text>
+                      <text x="75" y="126" class="small" text-anchor="middle">BatDaemon</text>
+                    </g>
+
+                    <g id="node-daemon-bat" class="node">
+                      <rect x="320" y="55" rx="20" ry="20" width="140" height="110"></rect>
+                      <text x="390" y="99" text-anchor="middle">BatDaemon.run</text>
+                      <text x="390" y="122" class="small" text-anchor="middle">gather()</text>
+                      <text x="390" y="142" class="small" text-anchor="middle">sync + listen</text>
+                    </g>
+
+                    <g id="node-daemon-sync" class="node store">
+                      <rect x="660" y="55" rx="20" ry="20" width="120" height="110"></rect>
+                      <text x="720" y="100" text-anchor="middle">sync_targets</text>
+                      <text x="720" y="123" class="small" text-anchor="middle">60초마다</text>
+                      <text x="720" y="143" class="small" text-anchor="middle">DB 재조회</text>
+                    </g>
+
+                    <g id="node-daemon-db" class="node store">
+                      <rect x="1000" y="52" rx="20" ry="20" width="180" height="96"></rect>
+                      <text x="1090" y="92" text-anchor="middle">DB: monitoring_targets</text>
+                      <text x="1090" y="115" class="small" text-anchor="middle">active_targets 갱신</text>
+                    </g>
+
+                    <g id="node-daemon-ws" class="node">
+                      <rect x="1000" y="170" rx="20" ry="20" width="180" height="110"></rect>
+                      <text x="1090" y="214" text-anchor="middle">listen_upbit_ws</text>
+                      <text x="1090" y="237" class="small" text-anchor="middle">watching_coins 없으면 대기</text>
+                      <text x="1090" y="257" class="small" text-anchor="middle">있으면 구독</text>
+                    </g>
+
+                    <g id="node-daemon-process" class="node">
+                      <rect x="980" y="340" rx="20" ry="20" width="220" height="152"></rect>
+                      <text x="1090" y="392" text-anchor="middle">process_candle_tick</text>
+                      <text x="1090" y="415" class="small" text-anchor="middle">target 조회</text>
+                      <text x="1090" y="435" class="small" text-anchor="middle">tick parse</text>
+                      <text x="1090" y="455" class="small" text-anchor="middle">실시간 / 마감 조건 분기</text>
+                    </g>
+
+                    <g id="node-daemon-realtime" class="node signal">
+                      <rect x="1000" y="606" rx="20" ry="20" width="180" height="132"></rect>
+                      <text x="1090" y="648" text-anchor="middle">실시간 판정</text>
+                      <text x="1090" y="671" class="small" text-anchor="middle">HOLDING이면 SELL 체크</text>
+                      <text x="1090" y="691" class="small" text-anchor="middle">WAITING_BUY+TOUCH면 BUY</text>
+                    </g>
+
+                    <g id="node-daemon-close" class="node signal">
+                      <rect x="760" y="606" rx="20" ry="20" width="160" height="120"></rect>
+                      <text x="840" y="648" text-anchor="middle">마감 캔들 판정</text>
+                      <text x="840" y="671" class="small" text-anchor="middle">WAITING_BUY + CLOSE</text>
+                      <text x="840" y="691" class="small" text-anchor="middle">가격/거래량/양봉 조건</text>
+                    </g>
+
+                    <g id="node-daemon-status" class="node store">
+                      <rect x="540" y="606" rx="20" ry="20" width="180" height="120"></rect>
+                      <text x="630" y="648" text-anchor="middle">direct execution</text>
+                      <text x="630" y="671" class="small" text-anchor="middle">BUY -> HOLDING</text>
+                      <text x="630" y="691" class="small" text-anchor="middle">SELL -> EXPIRED</text>
+                    </g>
+
+                    <g id="node-daemon-graph" class="node">
+                      <rect x="250" y="606" rx="20" ry="20" width="170" height="120"></rect>
+                      <text x="335" y="648" text-anchor="middle">Target Refresh Graph</text>
+                      <text x="335" y="671" class="small" text-anchor="middle">invoke_graph_for_target_refresh</text>
+                      <text x="335" y="691" class="small" text-anchor="middle">EXPIRED 타점 재계산</text>
+                    </g>
+
+                    <g id="node-daemon-flow" class="node">
+                      <rect x="940" y="844" rx="20" ry="20" width="290" height="58"></rect>
+                      <text x="1085" y="871" text-anchor="middle">Refresh graph: Meerkat 중심</text>
+                      <text x="1085" y="891" class="small" text-anchor="middle">monitoring_targets를 WAITING_BUY로 재갱신</text>
+                    </g>
+
+                    <g id="node-daemon-note" class="node store">
+                      <rect x="760" y="370" rx="20" ry="20" width="160" height="100"></rect>
+                      <text x="840" y="413" text-anchor="middle">조건 판독 함수</text>
+                      <text x="840" y="436" class="small" text-anchor="middle">is_touch_buy_signal</text>
+                      <text x="840" y="456" class="small" text-anchor="middle">should_check_close_buy</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="legend">
+                  <div class="legend-item"><span style="background:#cb6b2d"></span>선택한 BatDaemon 경로</div>
+                  <div class="legend-item"><span style="background:#3d8d7d"></span>DB 및 상태 저장</div>
+                  <div class="legend-item"><span style="background:#c96b61"></span>실시간 시그널 판정</div>
+                </div>
+              </div>
+
+              <div class="scenario" id="scenario-daemon">
+                <div class="section-head">
+                  <h2>BatDaemon 조건 분기</h2>
+                  <span class="badge warn">Direct Execution + Refresh</span>
+                </div>
+                <h3>감시 루프</h3>
+                <ul>
+                  <li><code>sync_targets_from_db()</code>는 60초마다 <code>monitoring_targets</code>를 재조회합니다.</li>
+                  <li>감시 코인 목록이 바뀌면 현재 웹소켓 연결을 닫아 새 목록으로 재구독합니다.</li>
+                  <li><code>watching_coins</code>가 비어 있으면 웹소켓을 열지 않고 같은 간격으로 대기합니다.</li>
+                </ul>
+                <h3>실시간 BUY / SELL</h3>
+                <ul>
+                  <li>상태가 <code>HOLDING</code>이면 현재가가 익절가 이상일 때 SELL, 손절가 이하일 때 SELL 시그널이 발생합니다.</li>
+                  <li>상태가 <code>WAITING_BUY</code>이고 <code>trigger_basis == TOUCH</code>이며 현재가가 매수 허용 구간 안에 있으면 BUY 시그널이 발생합니다.</li>
+                </ul>
+                <h3>CLOSE 기반 BUY</h3>
+                <ul>
+                  <li>새 1시간 캔들이 시작될 때 직전 캔들을 마감 캔들로 판정합니다.</li>
+                  <li>상태가 <code>WAITING_BUY</code>, 기준이 <code>CLOSE</code>, 종가가 범위 내, 거래량이 최소 기준 이상, 필요 시 양봉 마감이면 BUY 시그널이 발생합니다.</li>
+                </ul>
+                <h3>시그널 발생 후</h3>
+                <ul>
+                  <li>BUY/SELL 시그널이 나오면 Owl을 거치지 않고 Daemon이 즉시 지갑 체결을 수행합니다.</li>
+                  <li>BUY는 monitoring target의 <code>buy_allocation_pct</code>만큼 현재 원화 잔고를 사용해 체결합니다.</li>
+                  <li><code>dry_run</code>이면 BUY는 <code>HOLDING</code>, SELL은 <code>EXPIRED</code>로 시뮬레이션만 진행합니다.</li>
+                  <li>매수 완료 후 상태는 <code>HOLDING</code>이 되고, 매도 완료 후 상태는 <code>EXPIRED</code>가 됩니다.</li>
+                  <li>DB에 <code>EXPIRED</code> 타점이 보이면 Daemon이 Meerkat refresh 그래프를 호출해 새 <code>WAITING_BUY</code> 타점을 다시 계산합니다.</li>
+                </ul>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+
+      <div id="tab-graph" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-graph">
+        <section class="section grid two">
+          <div class="panel">
+            <div class="section-head">
+              <h2>그래프 구조와 사용처</h2>
+              <span class="badge ok">LangGraph 분리 현황</span>
+            </div>
+            <p class="subtle">
+              <code>magpie_agent/graph.py</code>는 현재 <code>build_common_graph()</code>의 alias입니다.
+              실제 그래프 빌더는 <code>magpie_agent/graphs/</code> 아래에 있고,
+              <code>shared.py</code>가 Owl/Hawk/Meerkat 노드와 공통 edge 조립을 담당합니다.
+            </p>
+            <div class="graph-pills">
+              <span class="graph-pill">Common: 사용자 대화 진입점</span>
+              <span class="graph-pill">Target Refresh: Daemon 후속 계산</span>
+              <span class="graph-pill">Signal Trigger: 현재 미사용에 가까운 경량 경로</span>
+              <span class="graph-pill">Daily Report: 정기 점검 확장용</span>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <h2>그래프 분리 기준</h2>
+              <span class="badge warn">용도별 조립</span>
+            </div>
+            <ul>
+              <li><code>shared.py</code>는 그래프 자체가 아니라 노드 추가 함수와 conditional edge 조립 함수 모음입니다. 그래프를 새로 나눌 때 우선 여기 재사용 가능 여부를 봐야 합니다.</li>
+              <li>사용자 대화, Daemon refresh, 정기 점검처럼 진입 목적이 다르면 별도 builder로 분리하고, 상태 플래그(<code>from_daemon</code>, <code>is_daily_review</code>)와 포함 노드를 최소화하는 편이 안전합니다.</li>
+              <li>현재 실사용 기준으로는 <code>Common Graph</code>와 <code>Target Refresh Graph</code>가 핵심이고, <code>Signal Trigger</code>와 <code>Daily Report</code>는 준비된 확장 그래프 성격이 더 강합니다.</li>
+              <li>Owl 프롬프트 선택은 <code>magpie_agent/agents/owl_director/node.py</code>에서 <code>is_daily_review → from_daemon → user</code> 순서로 갈립니다.</li>
+              <li>그래프 분리 작업 시에는 import 위치뿐 아니라 실제 호출 경로가 남아 있는지도 같이 확인해야 문서와 코드가 어긋나지 않습니다.</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="panel">
+            <div class="section-head">
+              <h2>그래프 시각화</h2>
+              <span class="badge ok">builder별 요약 다이어그램</span>
+            </div>
+            <p class="subtle">
+              아래 다이어그램은 각 builder가 어떤 노드만 묶고, 어디서 끝나는지 빠르게 비교할 수 있게 축약한 뷰입니다.
+            </p>
+
+            <div class="graph-grid">
+              <div class="graph-visual">
+                <h3><code>common.py</code> / <code>build_common_graph()</code></h3>
+                <p>사용자 인터랙션 기본 그래프. Owl → Hawk → Meerkat 전체 수직 플로우를 모두 포함합니다.</p>
+                <div class="mini-diagram">
+                  <svg viewBox="0 0 590 190" aria-label="Common Graph">
+                    <defs>
+                      <marker id="mini-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+                    <path class="mini-edge" d="M70 58 C100 58, 100 58, 132 58"></path>
+                    <path class="mini-edge" d="M204 58 C238 58, 238 58, 270 58"></path>
+                    <path class="mini-edge dashed" d="M204 82 C232 112, 252 122, 270 122"></path>
+                    <path class="mini-edge" d="M342 58 C370 58, 370 58, 396 58"></path>
+                    <path class="mini-edge dashed" d="M342 82 C338 120, 314 132, 270 132"></path>
+                    <path class="mini-edge" d="M342 132 C372 132, 372 132, 396 132"></path>
+                    <path class="mini-edge dashed" d="M204 148 C238 148, 238 148, 270 148"></path>
+                    <path class="mini-edge" d="M342 148 C370 148, 370 148, 396 148"></path>
+
+                    <g class="mini-node signal">
+                      <rect x="18" y="34" rx="16" ry="16" width="52" height="48"></rect>
+                      <text x="44" y="63" text-anchor="middle">START</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="132" y="28" rx="16" ry="16" width="72" height="60"></rect>
+                      <text x="168" y="54" text-anchor="middle">Owl</text>
+                      <text x="168" y="71" class="small" text-anchor="middle">route</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="270" y="28" rx="16" ry="16" width="72" height="60"></rect>
+                      <text x="306" y="54" text-anchor="middle">Owl Tools</text>
+                      <text x="306" y="71" class="small" text-anchor="middle">loop</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="270" y="102" rx="16" ry="16" width="72" height="60"></rect>
+                      <text x="306" y="128" text-anchor="middle">Hawk</text>
+                      <text x="306" y="145" class="small" text-anchor="middle">phase 1/2</text>
+                    </g>
+                    <g class="mini-node store">
+                      <rect x="396" y="28" rx="16" ry="16" width="80" height="60"></rect>
+                      <text x="436" y="54" text-anchor="middle">Hawk Tools</text>
+                      <text x="436" y="71" class="small" text-anchor="middle">store/update</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="396" y="102" rx="16" ry="16" width="80" height="60"></rect>
+                      <text x="436" y="128" text-anchor="middle">Meerkat</text>
+                      <text x="436" y="145" class="small" text-anchor="middle">chart/full</text>
+                    </g>
+                    <g class="mini-node store">
+                      <rect x="490" y="102" rx="16" ry="16" width="80" height="60"></rect>
+                      <text x="530" y="128" text-anchor="middle">Meerkat Tools</text>
+                      <text x="530" y="145" class="small" text-anchor="middle">targets</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="graph-meta">
+                  <div><strong>사용처</strong>: <code>magpie_agent/run.py</code>, <code>dashboard/session.py</code>, <code>magpie_agent/graph.py</code></div>
+                  <div><strong>상태 플래그</strong>: 보통 <code>from_daemon=False</code>, <code>is_daily_review=False</code></div>
+                </div>
+              </div>
+
+              <div class="graph-visual">
+                <h3><code>target_refresh.py</code> / <code>build_target_refresh_graph()</code></h3>
+                <p>SELL 완료 후 EXPIRED 타점을 다시 WAITING_BUY 후보로 재계산할 때 쓰는 Meerkat 중심 그래프입니다.</p>
+                <div class="mini-diagram">
+                  <svg viewBox="0 0 640 190" aria-label="Target Refresh Graph">
+                    <defs>
+                      <marker id="mini-arrow-refresh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M76 92 C126 92, 126 92, 176 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M280 92 C330 92, 330 92, 380 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M488 92 C526 92, 526 92, 560 92"></path>
+                    <g class="mini-node signal">
+                      <rect x="20" y="62" rx="16" ry="16" width="56" height="60"></rect>
+                      <text x="48" y="97" text-anchor="middle">START</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="176" y="56" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="228" y="87" text-anchor="middle">Meerkat</text>
+                      <text x="228" y="106" class="small" text-anchor="middle">full timing</text>
+                    </g>
+                    <g class="mini-node store">
+                      <rect x="380" y="56" rx="16" ry="16" width="108" height="72"></rect>
+                      <text x="434" y="87" text-anchor="middle">Meerkat Tools</text>
+                      <text x="434" y="106" class="small" text-anchor="middle">targets refresh</text>
+                    </g>
+                    <g class="mini-node signal">
+                      <rect x="560" y="62" rx="16" ry="16" width="56" height="60"></rect>
+                      <text x="588" y="97" text-anchor="middle">END</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="graph-meta">
+                  <div><strong>사용처</strong>: <code>bat_daemon/run.py</code>에서 refresh graph 생성, <code>bat_daemon/integrations/target_refresh.py</code>에서 invoke</div>
+                  <div><strong>특징</strong>: Owl/Hawk 없이 바로 Meerkat로 시작하고 저장 후 종료</div>
+                </div>
+              </div>
+
+              <div class="graph-visual">
+                <h3><code>signal_trigger.py</code> / <code>build_signal_trigger_graph()</code></h3>
+                <p>원래는 Daemon 시그널 도달 시 Owl이 먼저 검증하고 필요시 Meerkat로 이어지는 경량 그래프용으로 만들어졌습니다.</p>
+                <div class="mini-diagram">
+                  <svg viewBox="0 0 810 190" aria-label="Signal Trigger Graph">
+                    <defs>
+                      <marker id="mini-arrow-trigger" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M72 62 C110 62, 110 62, 148 62"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M250 62 C284 62, 284 62, 318 62"></path>
+                    <path class="mini-edge dashed" style="marker-end:url(#mini-arrow-trigger)" d="M250 88 C292 118, 318 128, 352 128"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M422 128 C460 128, 460 128, 498 128"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M602 128 C636 128, 636 128, 670 128"></path>
+                    <g class="mini-node signal">
+                      <rect x="18" y="32" rx="16" ry="16" width="54" height="60"></rect>
+                      <text x="45" y="67" text-anchor="middle">START</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="148" y="26" rx="16" ry="16" width="102" height="72"></rect>
+                      <text x="199" y="57" text-anchor="middle">Owl</text>
+                      <text x="199" y="76" class="small" text-anchor="middle">daemon prompt</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="318" y="26" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="370" y="57" text-anchor="middle">Owl Tools</text>
+                      <text x="370" y="76" class="small" text-anchor="middle">always return</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="498" y="92" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="550" y="123" text-anchor="middle">Meerkat</text>
+                      <text x="550" y="142" class="small" text-anchor="middle">full timing only</text>
+                    </g>
+                    <g class="mini-node store">
+                      <rect x="670" y="92" rx="16" ry="16" width="112" height="72"></rect>
+                      <text x="726" y="123" text-anchor="middle">Meerkat Tools</text>
+                      <text x="726" y="142" class="small" text-anchor="middle">save then end</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="graph-meta">
+                  <div><strong>노드 구성</strong>: Owl Director, Owl Tools, Meerkat Scanner, Meerkat Tools</div>
+                  <div><strong>사용처</strong>: 현재 저장소 내 직접 호출 지점 없음</div>
+                </div>
+              </div>
+
+              <div class="graph-visual">
+                <h3><code>daily_report.py</code> / <code>build_daily_report_graph()</code></h3>
+                <p>공통 그래프와 구조는 같지만 Owl이 daily prompt를 쓰도록 <code>is_daily_review</code>를 전제로 하는 정기 점검용 그래프입니다.</p>
+                <div class="mini-diagram">
+                  <svg viewBox="0 0 830 190" aria-label="Daily Report Graph">
+                    <defs>
+                      <marker id="mini-arrow-daily" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
+                      </marker>
+                    </defs>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M72 62 C110 62, 110 62, 148 62"></path>
+                    <path class="mini-edge dashed" style="marker-end:url(#mini-arrow-daily)" d="M250 62 C284 62, 284 62, 318 62"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M422 62 C456 62, 456 62, 490 62"></path>
+                    <path class="mini-edge dashed" style="marker-end:url(#mini-arrow-daily)" d="M422 88 C454 116, 482 128, 520 128"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M624 128 C658 128, 658 128, 692 128"></path>
+                    <g class="mini-node signal">
+                      <rect x="18" y="32" rx="16" ry="16" width="54" height="60"></rect>
+                      <text x="45" y="67" text-anchor="middle">START</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="148" y="26" rx="16" ry="16" width="102" height="72"></rect>
+                      <text x="199" y="57" text-anchor="middle">Owl</text>
+                      <text x="199" y="76" class="small" text-anchor="middle">daily prompt</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="318" y="26" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="370" y="57" text-anchor="middle">Owl Tools</text>
+                      <text x="370" y="76" class="small" text-anchor="middle">register/edit</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="490" y="26" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="542" y="57" text-anchor="middle">Hawk</text>
+                      <text x="542" y="76" class="small" text-anchor="middle">optional route</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="520" y="92" rx="16" ry="16" width="104" height="72"></rect>
+                      <text x="572" y="123" text-anchor="middle">Meerkat</text>
+                      <text x="572" y="142" class="small" text-anchor="middle">review timing</text>
+                    </g>
+                    <g class="mini-node store">
+                      <rect x="692" y="92" rx="16" ry="16" width="112" height="72"></rect>
+                      <text x="748" y="123" text-anchor="middle">Meerkat Tools</text>
+                      <text x="748" y="142" class="small" text-anchor="middle">save then end</text>
+                    </g>
+                  </svg>
+                </div>
+                <div class="graph-meta">
+                  <div><strong>노드 구성</strong>: Common Graph와 동일</div>
+                  <div><strong>사용처</strong>: 현재 저장소 내 직접 호출 지점 없음</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section graph-card-grid">
+          <div class="graph-path-card">
+            <h3>현재 운영 경로에서 중요한 그래프</h3>
+            <p><code>build_common_graph()</code>는 사용자 대화 진입점의 실질적인 메인 그래프이고, <code>build_target_refresh_graph()</code>는 Daemon 후속 재계산 경로의 핵심입니다.</p>
+          </div>
+          <div class="graph-path-card">
+            <h3>현재는 대기 중인 그래프</h3>
+            <p><code>build_signal_trigger_graph()</code>, <code>build_daily_report_graph()</code>는 설계상 의미는 있지만 현재 엔트리포인트에 직접 연결되지는 않습니다.</p>
+          </div>
+        </section>
+      </div>
+
+      <div id="tab-notes" class="tab-panel" role="tabpanel" aria-labelledby="tab-button-notes">
+        <section class="section grid two">
+          <div class="panel">
+            <div class="section-head">
+              <h2>엔티티 관계</h2>
+              <span class="badge ok">누가 무엇을 읽고 쓰는가</span>
+            </div>
+            <ul>
+              <li><code>strategies</code>: Owl이 저장/수정, Hawk가 조회 및 <code>target_coins</code> 갱신, Meerkat이 조회합니다.</li>
+              <li><code>monitoring_targets</code>: Meerkat이 최종 타점과 <code>buy_allocation_pct</code>를 저장하고, BatDaemon은 <code>WAITING_BUY</code>/<code>HOLDING</code>만 감시합니다. <code>EXPIRED</code>는 감시에서 제외됩니다.</li>
+              <li><code>wallets</code>: Owl Tools도 조회/수정할 수 있지만, 현재 BatDaemon도 BUY/SELL 시 직접 수정합니다. 지갑에는 자산 외에 <code>trade_stats</code>도 함께 저장됩니다.</li>
+              <li><code>trade_history</code>: BatDaemon 직접 체결과 Owl Tool 체결 모두 여기 기록되며, Meerkat이 다음 타점 계산 시 참고합니다.</li>
+              <li><code>BatDaemon</code>: 조건을 만족하면 즉시 체결하고, 매도 완료 후 EXPIRED 타점을 다시 Meerkat에 맡겨 갱신합니다.</li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <h2>조건 매트릭스</h2>
+              <span class="badge ok">핵심 if/route</span>
+            </div>
+            <div class="matrix-cards">
+              <div class="matrix-card">
+                <h3>Owl</h3>
+                <p>tool call이 없으면 그래프를 종료하고 텔레그램에 일반 답변을 보냅니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Owl Tools</h3>
+                <p><code>register_strategy_to_nest</code>가 끝나면 Hawk Picker가 자동 호출됩니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Hawk Phase 1</h3>
+                <p><code>store_hawk_candidates</code> 호출 후 Meerkat이 차트 분석 전용 단계로 진입합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Meerkat chart_only</h3>
+                <p><code>meerkat_mode == "chart_only"</code>이면 리포트만 만들고 Hawk로 복귀합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Meerkat full timing</h3>
+                <p>전략, 지갑, 최근 매매 기록, 기존 타점을 반영해 최종 타점과 매수 비율을 계산하고 DB에 저장합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>BatDaemon HOLDING</h3>
+                <p><code>status == HOLDING</code>이면 익절가와 손절가를 기준으로 SELL을 체크합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>BatDaemon TOUCH BUY</h3>
+                <p><code>WAITING_BUY + TOUCH + 가격범위 충족</code>이면 즉시 BUY 시그널이 발생하고 <code>buy_allocation_pct</code> 비율만큼 체결합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>BatDaemon CLOSE BUY</h3>
+                <p><code>WAITING_BUY + CLOSE + 거래량/양봉 조건 충족</code>이면 캔들 마감 기준 BUY가 발생합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Expired Refresh Graph</h3>
+                <p><code>EXPIRED</code> 타점이 발견되면 Meerkat이 새 타점을 계산해 다시 <code>WAITING_BUY</code>로 갱신합니다.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="panel">
+            <div class="section-head">
+              <h2>검증 메모</h2>
+              <span class="badge ok">코드 기준 작성</span>
+            </div>
+            <ul>
+              <li>문서의 엔트리포인트, 라우팅, DB 컬렉션명, 상태값은 현재 저장소의 Python 코드와 대조해 작성했습니다.</li>
+              <li>특히 Daemon 쪽은 직접 체결, <code>HOLDING/EXPIRED</code> 상태 전환, EXPIRED refresh 그래프, CLOSE 조건 검사를 누락하지 않도록 반영했습니다.</li>
+              <li>Magpie Agent 쪽은 Common / Target Refresh / Signal Trigger / Daily Report 그래프를 파일 단위로 다시 대조해 현재 사용 여부까지 구분해서 표기했습니다.</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section footnotes">
+          <div class="note">
+            <h3>추가 설명이 필요한 부분</h3>
+            <ul>
+              <li>Meerkat의 <code>chart_only</code> 단계는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
+              <li>BatDaemon이 발생시키는 BUY/SELL은 이제 실제 체결로 바로 이어집니다. Owl은 이 경로의 체결 검증에 더 이상 개입하지 않습니다.</li>
+              <li><code>monitoring_targets.status</code>는 현재 코드 기준으로 <code>WAITING_BUY → HOLDING → EXPIRED → WAITING_BUY</code> 루프를 따릅니다.</li>
+              <li><code>bat_daemon/backtest.py</code>와 dashboard의 Bat Daemon 샘플도 이 직접 체결 로직을 dry-run 지갑 기준으로 최대한 동일하게 재생합니다.</li>
+              <li>dashboard와 <code>bat_daemon/backtest.py</code>는 기본적으로 같은 <code>user_id</code> 지갑을 쓰지만, 필요하면 별도 <code>wallet_user_id</code> 지갑을 선택해 시뮬레이션할 수 있습니다.</li>
+              <li>dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받도록 정리되어 있습니다.</li>
+              <li><code>signal_trigger.py</code>와 <code>daily_report.py</code>는 지금 당장 엔트리포인트에 연결되어 있지 않지만, 그래프 분리 후보로 남아 있는 구조입니다.</li>
+            </ul>
+          </div>
+
+          <div class="note">
+            <h3>문서 작성에 사용한 주요 코드 파일</h3>
+            <ul class="source-list">
+              <li><code>bat_daemon/run.py</code></li>
+              <li><code>bat_daemon/signals/rules.py</code></li>
+              <li><code>bat_daemon/stores/target_store.py</code></li>
+              <li><code>bat_daemon/integrations/target_refresh.py</code></li>
+              <li><code>magpie_agent/run.py</code></li>
+              <li><code>magpie_agent/graphs/common.py</code></li>
+              <li><code>magpie_agent/graphs/daily_report.py</code></li>
+              <li><code>magpie_agent/graphs/signal_trigger.py</code></li>
+              <li><code>magpie_agent/graphs/target_refresh.py</code></li>
+              <li><code>magpie_agent/graphs/shared.py</code></li>
+              <li><code>magpie_agent/graph.py</code></li>
+              <li><code>magpie_agent/agents/owl_director/node.py</code></li>
+              <li><code>magpie_agent/agents/hawk_picker/node.py</code></li>
+              <li><code>magpie_agent/agents/meerkat_scanner/node.py</code></li>
+              <li><code>magpie_agent/tools/strategy.py</code></li>
+              <li><code>magpie_agent/tools/monitor_target.py</code></li>
+              <li><code>magpie_agent/tools/wallet.py</code></li>
+              <li><code>db/entity.py</code>, <code>db/mongo.py</code></li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const scenarios = {
+      reset: {
+        nodes: [],
+        edges: [],
+      },
+      "user-strategy": {
+        nodes: [
+          "node-user-start",
+          "node-user-run",
+          "node-user-owl",
+          "node-user-owltools",
+          "node-db-strategy",
+          "node-user-hawk",
+          "node-user-hawktools",
+          "node-user-meerkat",
+          "node-db-targets",
+          "node-user-meerkattools",
+        ],
+        edges: [
+          "edge-user-1",
+          "edge-user-2",
+          "edge-user-4",
+          "edge-user-9",
+          "edge-user-7",
+          "edge-user-13",
+          "edge-user-8",
+          "edge-user-11",
+          "edge-user-12",
+          "edge-user-14",
+        ],
+      },
+      "user-wallet": {
+        nodes: [
+          "node-user-start",
+          "node-user-run",
+          "node-user-owl",
+          "node-user-owltools",
+          "node-db-wallet",
+          "node-user-end",
+        ],
+        edges: [
+          "edge-user-1",
+          "edge-user-2",
+          "edge-user-4",
+          "edge-user-10",
+          "edge-user-3",
+        ],
+      },
+      "daemon-buy": {
+        nodes: [
+          "node-daemon-start",
+          "node-daemon-bat",
+          "node-daemon-sync",
+          "node-daemon-db",
+          "node-daemon-ws",
+          "node-daemon-process",
+          "node-daemon-realtime",
+          "node-daemon-status",
+          "node-daemon-graph",
+          "node-daemon-flow",
+        ],
+        edges: [
+          "edge-daemon-1",
+          "edge-daemon-2",
+          "edge-daemon-3",
+          "edge-daemon-4",
+          "edge-daemon-5",
+          "edge-daemon-6",
+          "edge-daemon-8",
+          "edge-daemon-9",
+          "edge-daemon-10",
+        ],
+      },
+      "daemon-sell": {
+        nodes: [
+          "node-daemon-start",
+          "node-daemon-bat",
+          "node-daemon-ws",
+          "node-daemon-process",
+          "node-daemon-realtime",
+          "node-daemon-status",
+          "node-daemon-graph",
+          "node-daemon-flow",
+        ],
+        edges: [
+          "edge-daemon-1",
+          "edge-daemon-4",
+          "edge-daemon-5",
+          "edge-daemon-6",
+          "edge-daemon-8",
+          "edge-daemon-9",
+          "edge-daemon-10",
+        ],
+      },
+      "daemon-close": {
+        nodes: [
+          "node-daemon-start",
+          "node-daemon-bat",
+          "node-daemon-ws",
+          "node-daemon-process",
+          "node-daemon-note",
+          "node-daemon-close",
+          "node-daemon-status",
+          "node-daemon-graph",
+          "node-daemon-flow",
+        ],
+        edges: [
+          "edge-daemon-1",
+          "edge-daemon-4",
+          "edge-daemon-5",
+          "edge-daemon-11",
+          "edge-daemon-7",
+          "edge-daemon-8",
+          "edge-daemon-9",
+          "edge-daemon-10",
+        ],
+      },
+    };
+
+    function setScenario(name) {
+      document.querySelectorAll(".scenario-picker button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.scenario === name);
+      });
+
+      document.querySelectorAll(".node, .edge").forEach((el) => el.classList.remove("active"));
+      const selected = scenarios[name] || scenarios.reset;
+      selected.nodes.forEach((id) => document.getElementById(id)?.classList.add("active"));
+      selected.edges.forEach((id) => document.getElementById(id)?.classList.add("active"));
+    }
+
+    function setTab(name) {
+      document.querySelectorAll(".tab-button").forEach((button) => {
+        const isActive = button.dataset.tab === name;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === `tab-${name}`);
+      });
+    }
+
+    document.querySelectorAll(".scenario-picker button").forEach((button) => {
+      button.addEventListener("click", () => setScenario(button.dataset.scenario));
+    });
+
+    document.querySelectorAll(".tab-button").forEach((button) => {
+      button.addEventListener("click", () => setTab(button.dataset.tab));
+    });
+
+    setScenario("reset");
+    setTab("flow");
+  </script>
+</body>
+</html>

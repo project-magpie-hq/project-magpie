@@ -5,39 +5,61 @@ from typing import Any
 from websockets.exceptions import ConnectionClosed
 
 from bat_daemon.constant import DB_SYNC_INTERVAL_SECONDS, SignalType
-from bat_daemon.integrations.graph_event import invoke_graph_for_trigger
+from bat_daemon.integrations.target_refresh import invoke_graph_for_target_refresh
 from bat_daemon.market_data.candle import CandleTick, ClosedCandle, is_new_candle, parse_closed_candle, parse_tick
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
 from bat_daemon.signals.rules import close_buy_rejection_reason, is_touch_buy_signal, should_check_close_buy
-from bat_daemon.stores.target_store import fetch_target_map, update_target_status
+from bat_daemon.stores.target_store import fetch_target_map, fetch_targets_by_status, update_target_status
 from db.entity import TargetEntity
 from magpie_agent.agents.meerkat_scanner.schema import TargetStatus
-from magpie_agent.graphs.signal_trigger import build_signal_trigger_graph
+from magpie_agent.graphs.target_refresh import build_target_refresh_graph
+from magpie_agent.tools.wallet import (
+    apply_trade_to_wallet_entity,
+    execute_trade_for_daemon,
+    fetch_wallet_by_user,
+    resolve_trade_volume_from_wallet,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class BatDaemon:
-    def __init__(self, user_id: str, *, dry_run: bool = False, enable_graph: bool = True) -> None:
+    def __init__(
+        self,
+        user_id: str,
+        *,
+        wallet_user_id: str | None = None,
+        dry_run: bool = False,
+        enable_graph: bool = True,
+    ) -> None:
         self.user_id = user_id
+        self.wallet_user_id = wallet_user_id or user_id
         self.dry_run = dry_run
         self.enable_graph = enable_graph
         self.active_targets: dict[str, TargetEntity] = {}
         self.watching_coins: set[str] = set()
         self.ws_connection: Any = None
         self.current_candles: dict[str, dict[str, Any]] = {}
-        self.magpie_graph = build_signal_trigger_graph() if enable_graph and not dry_run else None
-        self.graph_tasks: set[asyncio.Task] = set()
+        self.refresh_graph = build_target_refresh_graph() if enable_graph and not dry_run else None
+        self.refresh_task: asyncio.Task | None = None
         self.signal_history: list[dict[str, Any]] = []
         self.current_event_time: str | None = None
+        self.simulated_wallet = None
 
     async def run(self) -> None:
         await asyncio.gather(self.sync_targets_from_db(), self.listen_upbit_ws())
 
     async def load_targets_from_db_once(self) -> None:
         """MongoDB에 저장된 현재 모니터링 타겟을 한 번 로드합니다."""
-        self.active_targets = await fetch_target_map(self.user_id)
+        target_map = await fetch_target_map(self.user_id)
+        self.active_targets = {
+            coin: target
+            for coin, target in target_map.items()
+            if target.status in {TargetStatus.WAITING_BUY, TargetStatus.HOLDING}
+        }
         self.watching_coins = set(self.active_targets)
+        if self.dry_run and self.simulated_wallet is None:
+            self.simulated_wallet = await fetch_wallet_by_user(self.wallet_user_id)
 
     async def sync_targets_from_db(self) -> None:
         print("🦇 [Bat Daemon]: 감시 레이더 시작! MongoDB와 동기화를 시작합니다.")
@@ -97,6 +119,7 @@ class BatDaemon:
     async def _sync_targets_once(self) -> None:
         old_watching_coins = set(self.watching_coins)
         await self.load_targets_from_db_once()
+        await self._maybe_schedule_expired_target_refresh()
 
         if self.watching_coins == old_watching_coins:
             return
@@ -197,18 +220,13 @@ class BatDaemon:
     async def _emit_signal(
         self, target_entity: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
     ) -> None:
-        target_entity.status = TargetStatus.CHECKING
-        await self._update_target_status(target_entity.target_coin, TargetStatus.CHECKING)
-        self._dispatch_signal(target_entity, signal_type, current_price, event_reason)
+        self._record_signal(target_entity, signal_type, current_price, event_reason)
 
-    def _dispatch_signal(self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str):
-        self._record_signal(target, signal_type, current_price, event_reason)
-
-        if self.dry_run or not self.enable_graph:
-            self._apply_dry_run_result(target, signal_type, current_price, event_reason)
+        if self.dry_run:
+            await self._apply_dry_run_result(target_entity, signal_type, current_price, event_reason)
             return
 
-        self._schedule_graph_task(target, signal_type, current_price, event_reason)
+        await self._execute_trade_from_signal(target_entity, signal_type, current_price, event_reason)
 
     def _record_signal(
         self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
@@ -221,42 +239,138 @@ class BatDaemon:
                 "event_reason": event_reason,
                 "target_status": target.status.value if hasattr(target.status, "value") else target.status,
                 "event_time": self.current_event_time,
+                "buy_allocation_pct": getattr(target, "buy_allocation_pct", None),
+                "wallet_user_id": self.wallet_user_id,
             }
         )
 
-    def _apply_dry_run_result(
+    async def _apply_dry_run_result(
         self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
     ) -> None:
-        simulated_status = TargetStatus.HOLDING if signal_type == SignalType.BUY else TargetStatus.DONE
-        target.status = simulated_status
+        try:
+            volume = self._simulate_trade_volume(target, signal_type, current_price)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("[Backtest Trade Simulation Error]")
+            self.signal_history[-1]["execution_error"] = str(exc)
+            print(
+                f"   ❌ [Backtest]: {target.target_coin} / {signal_type} / "
+                f"{event_reason} 시뮬레이션 실패 ({type(exc).__name__}: {exc})"
+            )
+            return
+
+        simulated_status = TargetStatus.HOLDING if signal_type == SignalType.BUY else TargetStatus.EXPIRED
+        await self._apply_post_trade_state(target, simulated_status)
         self.signal_history[-1]["result_status"] = simulated_status.value
+        self.signal_history[-1]["executed_volume"] = volume
+        if self.simulated_wallet is not None:
+            self.signal_history[-1]["simulated_balance"] = self.simulated_wallet.balance
         print(
-            f"   🧪 [Backtest]: Graph 호출 생략 -> {target.target_coin} / {signal_type} / "
-            f"{event_reason} / {current_price:,.0f}원 / 상태: {simulated_status}"
+            f"   🧪 [Backtest]: 직접 체결 시뮬레이션 -> {target.target_coin} / {signal_type} / "
+            f"{event_reason} / {current_price:,.0f}원 / 수량: {volume:.8f} / 상태: {simulated_status}"
         )
 
-    def _schedule_graph_task(
-        self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
+    def _simulate_trade_volume(self, target: TargetEntity, signal_type: SignalType, current_price: float) -> float:
+        if self.simulated_wallet is None:
+            raise ValueError("시뮬레이션용 지갑이 없습니다.")
+
+        volume = resolve_trade_volume_from_wallet(
+            self.simulated_wallet,
+            target.target_coin,
+            signal_type,
+            current_price,
+            buy_allocation_pct=target.buy_allocation_pct if signal_type == SignalType.BUY else None,
+        )
+        apply_trade_to_wallet_entity(
+            self.simulated_wallet,
+            target.target_coin,
+            signal_type,
+            current_price,
+            volume,
+        )
+        return volume
+
+    async def _execute_trade_from_signal(
+        self,
+        target: TargetEntity,
+        signal_type: SignalType,
+        current_price: float,
+        event_reason: str,
     ) -> None:
-        task = asyncio.create_task(
-            invoke_graph_for_trigger(
-                self.magpie_graph,
-                self.user_id,
-                target,
+        try:
+            _, volume = await execute_trade_for_daemon(
+                self.wallet_user_id,
+                target.target_coin,
                 signal_type,
                 current_price,
-                event_reason,
+                buy_allocation_pct=target.buy_allocation_pct if signal_type == SignalType.BUY else None,
             )
-        )
-        self.graph_tasks.add(task)
-        task.add_done_callback(self._on_graph_task_done)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("[Trade Execution Error]")
+            self.signal_history[-1]["execution_error"] = str(exc)
+            print(
+                f"   ❌ [Direct Execution]: {target.target_coin} / {signal_type} / "
+                f"{event_reason} 체결 실패 ({type(exc).__name__}: {exc})"
+            )
+            return
 
-    def _on_graph_task_done(self, task: asyncio.Task):
-        self.graph_tasks.discard(task)
+        new_status = TargetStatus.HOLDING if signal_type == SignalType.BUY else TargetStatus.EXPIRED
+        await self._apply_post_trade_state(target, new_status)
+        self.signal_history[-1]["result_status"] = new_status.value
+        self.signal_history[-1]["executed_volume"] = volume
+        print(
+            f"   ✅ [Direct Execution]: {target.target_coin} {signal_type.value} 체결 완료 "
+            f"(수량: {volume:.8f}) -> 상태: {new_status.value}"
+        )
+
+    async def _apply_post_trade_state(self, target: TargetEntity, new_status: TargetStatus) -> None:
+        target.status = new_status
+        await self._update_target_status(target.target_coin, new_status)
+
+        if new_status == TargetStatus.EXPIRED:
+            self.active_targets.pop(target.target_coin, None)
+            self.current_candles.pop(target.target_coin, None)
+            coin_removed = target.target_coin in self.watching_coins
+            self.watching_coins.discard(target.target_coin)
+            if coin_removed:
+                await self._close_ws_connection()
+            self._schedule_expired_target_refresh()
+
+    async def _maybe_schedule_expired_target_refresh(self) -> None:
+        if self.dry_run or not self.enable_graph or self.refresh_graph is None:
+            return
+
+        if self.refresh_task and not self.refresh_task.done():
+            return
+
+        expired_targets = await fetch_targets_by_status(self.user_id, [TargetStatus.EXPIRED])
+        if not expired_targets:
+            return
+
+        self._schedule_expired_target_refresh(expired_targets)
+
+    def _schedule_expired_target_refresh(self, expired_targets: list[TargetEntity] | None = None) -> None:
+        if self.dry_run or not self.enable_graph or self.refresh_graph is None:
+            return
+
+        if self.refresh_task and not self.refresh_task.done():
+            return
+
+        expired_target_coins = [target.target_coin for target in expired_targets] if expired_targets else []
+        if expired_target_coins:
+            print(f"   ♻️ [Expired Targets]: 타점 재계산 대기 -> {expired_target_coins}")
+
+        self.refresh_task = asyncio.create_task(self._refresh_expired_targets())
+        self.refresh_task.add_done_callback(self._on_refresh_task_done)
+
+    async def _refresh_expired_targets(self) -> None:
+        await invoke_graph_for_target_refresh(self.refresh_graph, self.user_id)
+        await self._sync_targets_once()
+
+    def _on_refresh_task_done(self, task: asyncio.Task) -> None:
         try:
             task.result()
         except Exception as exc:  # noqa: BLE001
-            print(f"   ❌ [Daemon->Graph]: 그래프 실행 실패 ({type(exc).__name__}: {exc})")
+            print(f"   ❌ [Daemon->Refresh]: 타점 재계산 실패 ({type(exc).__name__}: {exc})")
 
     async def _update_target_status(self, target_coin: str, new_status: TargetStatus):
         if self.dry_run:
