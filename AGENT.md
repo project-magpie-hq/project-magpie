@@ -16,6 +16,7 @@
 - `monitoring_targets`에는 가격 조건뿐 아니라 `buy_allocation_pct` 같은 포지션 비율 정보도 포함됩니다.
 - `wallets`에는 현재 자산 외에 `trade_history`가 저장되어 Meerkat이 다음 타점 계산 시 과거 체결 맥락을 함께 참고합니다.
 - dashboard의 Backtest와 `bat_daemon/backtest.py`는 원본 전략 `user_id`를 읽어 백테스트 전용 `backtest_id`의 전략/지갑/타점을 새로 생성한 뒤 재생합니다.
+- 현재 Meerkat full timing은 다시 전략의 `target_coins` 전체를 한 번에 읽어 타점을 계산하는 구조입니다.
 - dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받습니다.
 
 ## 핵심 실행 흐름
@@ -30,6 +31,11 @@
   - BUY 시그널 발생 시 `buy_allocation_pct`만큼 현재 원화 잔고를 사용해 직접 매수합니다.
   - SELL 시그널 발생 시 해당 코인 보유 수량을 직접 매도합니다.
   - 매도 완료 타겟은 `EXPIRED`로 바꾸고, Meerkat 그래프로 새 타점을 다시 계산합니다.
+- 백테스트 진입점: `bat_daemon/backtest.py`
+  - 원본 전략을 `backtest_id`로 복제하고, 백테스트 전용 지갑과 monitoring target을 초기화합니다.
+  - 시작 시점의 refresh 그래프로 초기 타점을 만든 뒤, 전략의 `target_coins` 전체에 대한 과거 1시간봉 데이터를 로드합니다.
+  - 과거 tick 재생 중 `EXPIRED` refresh가 예약되면 해당 refresh가 끝날 때까지 기다린 뒤 다음 tick 재생을 이어갑니다.
+  - Meerkat/Gemini refresh가 쿼터 등으로 실패하더라도 백테스트 재생 자체는 계속 진행합니다.
 
 ## 수정 시 체크 규칙
 
@@ -48,3 +54,4 @@
 - UI/대시보드 수정이 아니더라도 실행 흐름에 영향이 있으면 `project_magpie_manual.html`을 먼저 의심합니다.
 - 새 작업을 끝낼 때는 "코드", "`AGENT.md`", "`docs/project_magpie_manual.html`"의 동기화 여부를 함께 확인합니다.
 - `bat_daemon/backtest.py`와 dashboard의 Backtest 뷰는 가능한 한 `bat_daemon/run.py`의 실제 체결 경로를 그대로 사용하되, 과거 tick 데이터와 `backtest_id` 전용 DB 문서만 다르게 사용합니다.
+- 백테스트 동작을 바꿀 때는 초기 타점 생성 방식, 과거 데이터 로드 범위(`watching_coins` vs 전략 전체 `target_coins`), refresh 완료 대기 시점을 함께 확인합니다.

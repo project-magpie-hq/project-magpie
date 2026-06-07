@@ -103,6 +103,12 @@ uv run python -m bat_daemon.backtest \
 uv run streamlit run dashboard/run.py
 ```
 
+### 9. Backtest Dashboard 실행
+
+```bash
+uv run streamlit run dashboard/backtest.py
+```
+
 
 ## 🛠️ 실행 및 테스트 (VS Code)
 루트 디렉토리의 .vscode/launch.json에 디버깅 환경이 세팅되어 있습니다.

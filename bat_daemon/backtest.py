@@ -9,7 +9,7 @@ from bat_daemon.market_data.historical import fetch_historical_candles_by_range
 from bat_daemon.run import BatDaemon
 from magpie_agent.graphs.target_refresh import build_target_refresh_graph
 from magpie_agent.tools.monitor_target import clear_monitoring_targets_by_user, fetch_monitoring_targets_by_user
-from magpie_agent.tools.strategy import clone_strategy_to_user
+from magpie_agent.tools.strategy import clone_strategy_to_user, fetch_strategy_by_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
 
 
@@ -64,6 +64,13 @@ async def _load_historical_data(coins: set[str], start: str, end: str) -> dict[s
         historical_data[coin] = df
         print(f"     ✅ {len(df)}개 캔들")
     return historical_data
+
+
+async def _load_backtest_universe(backtest_id: str) -> set[str]:
+    strategy = await fetch_strategy_by_user(backtest_id)
+    if strategy is None:
+        return set()
+    return set(strategy.get("target_coins") or [])
 
 
 async def prepare_backtest_environment(
@@ -127,7 +134,8 @@ async def run_backtest(
         return
 
     print(f"🎯 초기 DB 타겟({backtest_id}): {sorted(bat.watching_coins)}")
-    historical_data = await _load_historical_data(bat.watching_coins, start, end)
+    backtest_universe = await _load_backtest_universe(backtest_id)
+    historical_data = await _load_historical_data(backtest_universe or bat.watching_coins, start, end)
     if not historical_data:
         print("❌ 로드된 과거 캔들이 없어 백테스트를 중단합니다.")
         return
@@ -146,8 +154,11 @@ async def run_backtest(
             for _, trade_price in _candle_path(candle):
                 await bat.process_candle_tick(coin, _to_upbit_tick(coin, candle_time, candle, trade_price))
                 processed_ticks += 1
+                if bat.refresh_task is not None:
+                    await bat.wait_for_refresh_completion()
 
     await bat.flush_current_candles()
+    await bat.wait_for_refresh_completion()
 
     print("\n🏁 백테스트 종료")
     print(f"   처리한 가상 틱: {processed_ticks:,}개")

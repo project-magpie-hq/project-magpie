@@ -149,6 +149,16 @@ class BatDaemon:
             if target:
                 await self._evaluate_closed_candle(coin, last_candle, target)
 
+    async def wait_for_refresh_completion(self) -> None:
+        """예약된 타점 재계산 task가 있으면 종료될 때까지 기다립니다."""
+        if self.refresh_task is None:
+            return
+
+        try:
+            await self.refresh_task
+        finally:
+            self.refresh_task = None
+
     async def _check_realtime_signals(self, tick: CandleTick, target_entity: TargetEntity) -> None:
         """실시간(TOUCH) 조건 판별: 손절, 익절, TOUCH 방식의 매수"""
         if target_entity.status == TargetStatus.HOLDING:
@@ -353,12 +363,16 @@ class BatDaemon:
         self.refresh_task.add_done_callback(self._on_refresh_task_done)
 
     async def _refresh_expired_targets(self) -> None:
+        expired_targets = await fetch_targets_by_status(self.user_id, [TargetStatus.EXPIRED])
+        if not expired_targets:
+            return
+
         await invoke_graph_for_target_refresh(
             self.refresh_graph,
             self.user_id,
             backtest_time=self.current_event_time if self.backtest_mode else None,
         )
-        await self._sync_targets_once()
+        await self.load_targets_from_db_once()
 
     def _on_refresh_task_done(self, task: asyncio.Task) -> None:
         try:

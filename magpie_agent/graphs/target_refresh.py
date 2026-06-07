@@ -21,7 +21,12 @@ def build_target_refresh_graph() -> CompiledStateGraph:
 
         add_meerkat_and_tools(workflow)
         workflow.add_edge("__start__", NodeNames.MEERKAT_SCANNER.value)
-        add_meerkat_conditional_edges(workflow)
+        add_meerkat_conditional_edges(
+            workflow,
+            {
+                NodeNames.MEERKAT_TOOLS.value: NodeNames.MEERKAT_TOOLS.value,
+            },
+        )
         add_meerkat_tools_to_end(workflow)
 
         memory = MemorySaver()

@@ -6,6 +6,7 @@ import streamlit as st
 
 from bat_daemon.backtest import (
     _candle_path,
+    _load_backtest_universe,
     _load_historical_data,
     _to_upbit_tick,
     prepare_backtest_environment,
@@ -229,7 +230,8 @@ async def collect_backtest_daemon_sample(
     if not bat.watching_coins:
         return backtest_result(initial_targets, bat.active_targets, "monitoring target이 없습니다.")
 
-    historical_data = await _load_historical_data(bat.watching_coins, start, end)
+    backtest_universe = await _load_backtest_universe(backtest_id)
+    historical_data = await _load_historical_data(backtest_universe or bat.watching_coins, start, end)
     if not historical_data:
         return backtest_result(initial_targets, bat.active_targets, "로드된 과거 캔들이 없습니다.")
 
@@ -250,6 +252,8 @@ async def collect_backtest_daemon_sample(
                 )
                 signal_count_before = len(bat.signal_history)
                 await bat.process_candle_tick(coin, tick)
+                if bat.refresh_task is not None:
+                    await bat.wait_for_refresh_completion()
                 target_after = bat.active_targets.get(coin)
                 new_signals = bat.signal_history[signal_count_before:]
                 processed_ticks += 1
@@ -258,6 +262,7 @@ async def collect_backtest_daemon_sample(
                     tick_rows.append(tick_event_row(coin, tick, target_before, target_after, new_signals, "backtest"))
 
     await bat.flush_current_candles()
+    await bat.wait_for_refresh_completion()
 
     return {
         "initial_targets": initial_targets,
