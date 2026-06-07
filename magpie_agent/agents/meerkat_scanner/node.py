@@ -27,7 +27,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     meerkat_mode = state.get("meerkat_mode")
     is_chart_only = meerkat_mode == "chart_only"
 
-    sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
+    backtest_time: str | None = state.get("backtest_time")  # 라이브면 None, 백테스트면 과거 시간
 
     if is_chart_only:
         print("\n🦦 [Meerkat]: 차트 분석 전용 모드로 실행합니다...")
@@ -39,7 +39,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
             return {"messages": []}
 
         try:
-            chart_context = await generate_chart_context(target_coins, sim_time)
+            chart_context = await generate_chart_context(target_coins, backtest_time)
         except Exception as e:
             logger.exception("차트 컨텍스트 생성 실패: %s", target_coins)
             raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
@@ -68,7 +68,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     strategy = StrategySchema.model_validate(current_strategy)
 
     try:
-        chart_context = await generate_chart_context(strategy.target_coins, sim_time)
+        chart_context = await generate_chart_context(strategy.target_coins, backtest_time)
     except Exception as e:
         logger.exception("차트 컨텍스트 생성 실패: %s", strategy.target_coins)
         raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e

@@ -20,10 +20,6 @@ async def register_strategy_to_nest(
 ) -> str:
     """사용자가 전략을 최종 승인했을 때 호출하여, DB에 전략을 저장하거나 업데이트 합니다."""
 
-    if state.get("current_sim_time"):
-        print("✅ [시뮬레이션] 전략이 가상 메모리에 성공적으로 등록되었습니다. (DB 저장 생략)")
-        return "투자 전략 등록 및 업데이트가 성공적으로 완료되었습니다."
-
     user_id: str = state["user_id"]
     strategy_entity = StrategyEntity.model_validate(
         {"user_id": user_id, "target_coins": target_coins, "strategy_details": strategy_details}
@@ -89,6 +85,40 @@ async def fetch_strategy_by_user(user_id: str) -> dict | None:
         return None
 
 
+async def upsert_strategy_for_user(user_id: str, target_coins: list[str], strategy_details: dict) -> StrategyEntity:
+    strategy_entity = StrategyEntity.model_validate(
+        {
+            "user_id": user_id,
+            "target_coins": target_coins,
+            "strategy_details": strategy_details,
+        }
+    )
+    filter_query = {"user_id": user_id}
+    update_query = {
+        "$set": strategy_entity.model_dump(),
+        "$setOnInsert": {
+            "created_at": datetime.datetime.now(datetime.UTC),
+        },
+    }
+
+    try:
+        await get_strategies_collection().update_one(filter_query, update_query, upsert=True)
+    except Exception as e:
+        logger.exception("전략 DB 저장 실패 (user_id: %s)", user_id)
+        raise RuntimeError("전략 저장 중 DB 오류가 발생했습니다.") from e
+
+    return strategy_entity
+
+
+async def clone_strategy_to_user(source_user_id: str, target_user_id: str) -> StrategyEntity:
+    source_strategy = await fetch_strategy_by_user(source_user_id)
+    if source_strategy is None:
+        raise ValueError(f"원본 전략이 없습니다: {source_user_id}")
+
+    strategy = StrategySchema.model_validate(source_strategy)
+    return await upsert_strategy_for_user(target_user_id, strategy.target_coins, strategy.strategy_details)
+
+
 @tool
 async def get_my_active_strategy(state: Annotated[dict, InjectedState]) -> dict | None:
     """사용자가 본인의 전략을 열람하기 원할 때 호출하여, 활성화된 전략을 보여줍니다."""
@@ -105,10 +135,6 @@ async def update_strategy_target_coins(
     호크가 최종 선정한 타겟 코인 리스트를 전략에 업데이트합니다.
     Hawk Picker가 차트 분석 후 최종 선정한 코인들을 전략에 반영할 때 호출합니다.
     """
-    if state.get("current_sim_time"):
-        print("✅ [시뮬레이션] 타겟 코인이 가상 메모리에 성공적으로 업데이트되었습니다. (DB 저장 생략)")
-        return "타겟 코인 업데이트가 성공적으로 완료되었습니다."
-
     user_id: str = state["user_id"]
     now = datetime.datetime.now(datetime.UTC)
 

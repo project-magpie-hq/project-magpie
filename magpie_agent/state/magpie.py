@@ -22,8 +22,8 @@ class MagpieState(MessagesState):
     is_daily_review: bool | None
     # Owl이 다음 Agent를 누구를 부를지 결정하는 변수
     next_agent: AgentEnum | None
-    # 에이전트가 실행될 특정 시점
-    current_sim_time: str | None
+    # 백테스트에서 차트/타점 계산 기준이 되는 과거 시점
+    backtest_time: str | None
 
     # 실제 체결/주문 결과(향후 execution tool 연동용)
     execution_result: dict[str, Any] | None

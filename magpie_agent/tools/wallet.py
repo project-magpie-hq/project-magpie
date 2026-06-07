@@ -253,7 +253,7 @@ async def process_trade_execution(
     market: str, signal: SignalType, price: float, volume: float, state: Annotated[dict, InjectedState]
 ) -> str:
     """
-    매매 체결 시 호출되어 지갑의 자산 상태와 최근 체결 이력을 수정합니다.
+    매매 체결 시 호출되어 지갑의 자산 상태와 체결 이력을 수정합니다.
     잔고가 부족하거나 조건이 맞지 않으면 에러 메시지를 반환합니다.
 
     Args:

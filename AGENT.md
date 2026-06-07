@@ -15,7 +15,7 @@
 - `docs/project_magpie_manual.html`은 현재 코드 기준 실행 플로우 설명서입니다.
 - `monitoring_targets`에는 가격 조건뿐 아니라 `buy_allocation_pct` 같은 포지션 비율 정보도 포함됩니다.
 - `wallets`에는 현재 자산 외에 `trade_history`가 저장되어 Meerkat이 다음 타점 계산 시 과거 체결 맥락을 함께 참고합니다.
-- dashboard의 Bat Daemon dry-run/backtest는 기본적으로 현재 `user_id`의 지갑을 쓰지만, 필요하면 별도 `wallet_user_id` 지갑을 선택해 시뮬레이션할 수 있습니다.
+- dashboard의 Backtest와 `bat_daemon/backtest.py`는 원본 전략 `user_id`를 읽어 백테스트 전용 `backtest_id`의 전략/지갑/타점을 새로 생성한 뒤 재생합니다.
 - dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받습니다.
 
 ## 핵심 실행 흐름
@@ -47,5 +47,4 @@
 - 플로우를 바꾸는 수정은 코드와 문서를 함께 반영합니다.
 - UI/대시보드 수정이 아니더라도 실행 흐름에 영향이 있으면 `project_magpie_manual.html`을 먼저 의심합니다.
 - 새 작업을 끝낼 때는 "코드", "`AGENT.md`", "`docs/project_magpie_manual.html`"의 동기화 여부를 함께 확인합니다.
-- `bat_daemon/backtest.py`와 dashboard의 Bat Daemon 뷰는 가능한 한 `bat_daemon/run.py`의 dry-run 직접 체결 경로와 동일하게 유지합니다.
-- 단, dry-run/backtest에서는 target 조회용 `user_id`와 wallet 조회용 `wallet_user_id`를 분리할 수 있습니다.
+- `bat_daemon/backtest.py`와 dashboard의 Backtest 뷰는 가능한 한 `bat_daemon/run.py`의 실제 체결 경로를 그대로 사용하되, 과거 tick 데이터와 `backtest_id` 전용 DB 문서만 다르게 사용합니다.

@@ -31,11 +31,13 @@ class BatDaemon:
         wallet_user_id: str | None = None,
         dry_run: bool = False,
         enable_graph: bool = True,
+        backtest_mode: bool = False,
     ) -> None:
         self.user_id = user_id
         self.wallet_user_id = wallet_user_id or user_id
         self.dry_run = dry_run
         self.enable_graph = enable_graph
+        self.backtest_mode = backtest_mode
         self.active_targets: dict[str, TargetEntity] = {}
         self.watching_coins: set[str] = set()
         self.ws_connection: Any = None
@@ -237,7 +239,7 @@ class BatDaemon:
             self.signal_history[-1]["execution_error"] = str(exc)
             print(
                 f"   ❌ [Backtest]: {target.target_coin} / {signal_type} / "
-                f"{event_reason} 시뮬레이션 실패 ({type(exc).__name__}: {exc})"
+                f"{event_reason} 백테스트 체결 실패 ({type(exc).__name__}: {exc})"
             )
             return
 
@@ -248,13 +250,13 @@ class BatDaemon:
         if self.simulated_wallet is not None:
             self.signal_history[-1]["simulated_balance"] = self.simulated_wallet.balance
         print(
-            f"   🧪 [Backtest]: 직접 체결 시뮬레이션 -> {target.target_coin} / {signal_type} / "
+            f"   🧪 [Backtest]: 직접 체결 반영 -> {target.target_coin} / {signal_type} / "
             f"{event_reason} / {current_price:,.0f}원 / 수량: {volume:.8f} / 상태: {simulated_status}"
         )
 
     def _simulate_trade_volume(self, target: TargetEntity, signal_type: SignalType, current_price: float) -> float:
         if self.simulated_wallet is None:
-            raise ValueError("시뮬레이션용 지갑이 없습니다.")
+            raise ValueError("백테스트용 지갑이 없습니다.")
 
         volume = resolve_trade_volume_from_wallet(
             self.simulated_wallet,
@@ -351,7 +353,11 @@ class BatDaemon:
         self.refresh_task.add_done_callback(self._on_refresh_task_done)
 
     async def _refresh_expired_targets(self) -> None:
-        await invoke_graph_for_target_refresh(self.refresh_graph, self.user_id)
+        await invoke_graph_for_target_refresh(
+            self.refresh_graph,
+            self.user_id,
+            backtest_time=self.current_event_time if self.backtest_mode else None,
+        )
         await self._sync_targets_once()
 
     def _on_refresh_task_done(self, task: asyncio.Task) -> None:

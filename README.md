@@ -25,7 +25,7 @@ db/             # MongoDB 연결 및 Pydantic entity
 * `magpie_agent/tools/`: 전략, 타점, 지갑 도구
 * `magpie_agent/graphs/`: common, target_refresh, signal_trigger, daily_report builder
 * `bat_daemon/run.py`: DB의 monitoring target을 실시간 Upbit tick과 대조
-* `bat_daemon/backtest.py`: 현재 DB target을 과거 1시간봉으로 dry-run 백테스트
+* `bat_daemon/backtest.py`: 원본 전략을 backtest_id로 복제해 과거 1시간봉으로 재생 백테스트
 * `dashboard/run.py`: Agent 탭과 Bat Daemon 탭을 제공하는 Streamlit 진입점
 
 ## 📝 작업 문서 동기화 규칙
@@ -42,8 +42,7 @@ db/             # MongoDB 연결 및 Pydantic entity
 * SELL 완료 후 target 상태는 `EXPIRED`가 되고, Daemon은 Meerkat refresh 그래프로 새 `WAITING_BUY` 타점을 다시 계산합니다.
 * `monitoring_targets`에는 `buy_allocation_pct`가 포함되며, BUY 체결 금액은 현재 지갑 원화 잔고의 해당 비율로 계산됩니다.
 * `wallets`에는 잔고와 자산 외에 `trade_history`가 저장됩니다.
-* `bat_daemon/backtest.py`와 dashboard의 Bat Daemon 뷰는 `run.py`의 dry-run 직접 체결 경로를 최대한 동일하게 재생합니다.
-* dry-run/backtest에서는 target 조회용 `user_id`와 wallet 조회용 `wallet_user_id`를 분리할 수 있습니다.
+* `bat_daemon/backtest.py`와 dashboard의 Backtest 뷰는 원본 전략 `user_id`를 `backtest_id` 전용 전략/지갑/타점으로 복제한 뒤 `run.py`와 같은 체결 경로를 과거 tick 데이터로 재생합니다.
 * dashboard는 이제 전역 사이드바 대신 각 탭 안에서 필요한 입력값을 직접 받습니다.
 
 ## 🚀 로컬 개발 환경 세팅 가이드
@@ -91,10 +90,11 @@ uv run python -m bat_daemon.run
 
 ```bash
 uv run python -m bat_daemon.backtest \
-  --user-id test_developer_001 \
-  --wallet-user-id test_developer_001 \
+  --strategy-user-id test_developer_001 \
+  --backtest-id backtest_test_developer_001 \
   --start "2024-01-01 00:00:00" \
-  --end "2024-02-01 00:00:00"
+  --end "2024-02-01 00:00:00" \
+  --initial-balance 100000000
 ```
 
 ### 8. Dashboard 실행

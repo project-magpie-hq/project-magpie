@@ -18,10 +18,6 @@ async def register_monitoring_targets_to_nest(
 ) -> str:
     """미어캣이 계산한 최종 타점 리스트를 DB(The-Nest)의 monitor_targets 컬렉션에 저장하여 Bat 데몬이 감시할 수 있도록 합니다."""
 
-    if state.get("current_sim_time"):
-        print("✅ [시뮬레이션] 타점이 가상 메모리에 성공적으로 등록되었습니다. (DB 저장 생략)")
-        return "모든 타점 등록 및 업데이트가 성공적으로 완료되었습니다."
-
     user_id: str = state["user_id"]
 
     for target in targets:
@@ -68,6 +64,16 @@ async def fetch_monitoring_targets_by_user(user_id: str) -> list[dict] | None:
         raise RuntimeError("타점 조회 중 DB 오류가 발생했습니다.") from e
 
     return monitoring_targets if monitoring_targets else None
+
+
+async def clear_monitoring_targets_by_user(user_id: str) -> int:
+    try:
+        result = await get_monitoring_targets_collection().delete_many({"user_id": user_id})
+    except Exception as e:
+        logger.exception("타점 DB 삭제 실패 (user_id: %s)", user_id)
+        raise RuntimeError("타점 삭제 중 DB 오류가 발생했습니다.") from e
+
+    return result.deleted_count
 
 
 @tool

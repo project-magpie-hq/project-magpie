@@ -4,13 +4,19 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from bat_daemon.backtest import _candle_path, _load_historical_data, _to_upbit_tick
+from bat_daemon.backtest import (
+    _candle_path,
+    _load_historical_data,
+    _to_upbit_tick,
+    prepare_backtest_environment,
+)
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
 from bat_daemon.run import BatDaemon
 from bat_daemon.session_stats import build_session_stats_from_signal_history
 from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
 from db.entity import TargetEntity, WalletEntity
+from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
 
 
@@ -201,13 +207,22 @@ async def collect_live_daemon_sample(user_id: str, max_ticks: int, timeout_secon
 
 
 async def collect_backtest_daemon_sample(
-    user_id: str,
+    strategy_user_id: str,
+    backtest_id: str,
     start: str,
     end: str,
+    initial_balance: float,
     max_tick_rows: int,
 ) -> dict[str, Any]:
-    wallet_user_id = st.session_state.wallet_user_id or user_id
-    bat = BatDaemon(user_id, wallet_user_id=wallet_user_id, dry_run=True, enable_graph=False)
+    await prepare_backtest_environment(strategy_user_id, backtest_id, start, initial_balance)
+
+    bat = BatDaemon(
+        backtest_id,
+        wallet_user_id=backtest_id,
+        dry_run=False,
+        enable_graph=True,
+        backtest_mode=True,
+    )
     await bat.load_targets_from_db_once()
     initial_targets = {coin: target.model_copy(deep=True) for coin, target in bat.active_targets.items()}
 
@@ -252,8 +267,11 @@ async def collect_backtest_daemon_sample(
         "session_stats": build_session_stats_from_signal_history(bat.signal_history),
         "processed_ticks": processed_ticks,
         "loaded_candles": {coin: len(df) for coin, df in historical_data.items()},
-        "wallet": bat.simulated_wallet,
-        "wallet_user_id": bat.wallet_user_id,
+        "wallet": await fetch_wallet_by_user(backtest_id),
+        "wallet_user_id": backtest_id,
+        "strategy_user_id": strategy_user_id,
+        "backtest_id": backtest_id,
+        "generated_targets": await fetch_monitoring_targets_by_user(backtest_id),
     }
 
 
@@ -272,6 +290,9 @@ def backtest_result(
         "error": error,
         "wallet": None,
         "wallet_user_id": None,
+        "strategy_user_id": None,
+        "backtest_id": None,
+        "generated_targets": None,
     }
 
 
@@ -454,14 +475,37 @@ def render_live_daemon_panel(namespace: str = "bat_daemon") -> None:
 def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     st.markdown("#### 과거 캔들 백테스트")
     st.caption(
-        "DB의 현재 monitoring target을 기준으로 과거 1시간봉을 가상 tick으로 재생합니다. "
-        f"지갑은 `{st.session_state.wallet_user_id or st.session_state.user_id}` 기준으로 불러옵니다."
+        "원본 전략을 backtest_id 전용 전략/지갑/타점으로 복제한 뒤, 과거 1시간봉으로 run.py와 같은 체결 경로를 재생합니다."
     )
 
-    col_a, col_b, col_c = st.columns([1, 1, 1])
-    start = col_a.text_input("시작 일시", value="2024-01-01 00:00:00", key=f"{namespace}_start")
-    end = col_b.text_input("종료 일시", value="2024-02-01 00:00:00", key=f"{namespace}_end")
-    max_tick_rows = col_c.number_input(
+    col_a, col_b = st.columns(2)
+    strategy_user_id = col_a.text_input(
+        "Strategy User ID",
+        value=st.session_state.get("backtest_strategy_user_id_value", st.session_state.user_id),
+        key=f"{namespace}_strategy_user_id",
+        help="원본 strategies를 복사할 user_id입니다.",
+    )
+    backtest_id = col_b.text_input(
+        "Backtest ID",
+        value=st.session_state.get("backtest_id_value", "backtest_001"),
+        key=f"{namespace}_backtest_id",
+        help="전략/지갑/타점을 격리 저장할 백테스트 전용 user_id입니다.",
+    )
+    st.session_state.backtest_strategy_user_id_value = strategy_user_id
+    st.session_state.backtest_id_value = backtest_id
+
+    col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1])
+    start = col_c.text_input("시작 일시", value="2024-01-01 00:00:00", key=f"{namespace}_start")
+    end = col_d.text_input("종료 일시", value="2024-02-01 00:00:00", key=f"{namespace}_end")
+    initial_balance = col_e.number_input(
+        "초기 KRW",
+        min_value=0.0,
+        value=100000000.0,
+        step=1000000.0,
+        format="%.0f",
+        key=f"{namespace}_initial_balance",
+    )
+    max_tick_rows = col_f.number_input(
         "표시할 tick row 상한",
         min_value=20,
         max_value=5000,
@@ -471,10 +515,17 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     )
 
     if st.button("백테스트 실행", width="stretch", key=f"{namespace}_run_backtest"):
-        with st.spinner("과거 캔들을 로드하고 BatDaemon 판정 로직으로 재생하는 중..."):
+        with st.spinner("백테스트 전용 전략/지갑/타점을 준비하고 과거 캔들을 재생하는 중..."):
             try:
                 st.session_state.bat_backtest_result = run_async_task(
-                    collect_backtest_daemon_sample(st.session_state.user_id, start, end, int(max_tick_rows))
+                    collect_backtest_daemon_sample(
+                        strategy_user_id,
+                        backtest_id,
+                        start,
+                        end,
+                        float(initial_balance),
+                        int(max_tick_rows),
+                    )
                 )
             except Exception as exc:
                 st.session_state.bat_backtest_result = backtest_result({}, {}, str(exc))
@@ -493,17 +544,22 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     metric_cols[3].metric("로드 캔들", f"{sum(result.get('loaded_candles', {}).values()):,}")
 
     st.info(
-        "이 백테스트는 현재 BatDaemon의 dry-run 직접 체결 경로를 그대로 사용합니다. "
-        "즉, BUY는 monitoring target의 buy_allocation_pct 비율만큼 잔고를 사용하고, "
-        "SELL은 전량 매도한 뒤 지갑/신호 상태를 메모리에서 시뮬레이션합니다."
+        "이 백테스트는 원본 전략을 backtest_id로 복제한 뒤 실제 run.py와 같은 체결 경로를 사용합니다. "
+        "차이점은 실시간 websocket 대신 과거 1시간봉 tick 경로를 재생한다는 점뿐입니다."
     )
-    st.caption(f"사용 지갑 user_id: `{result.get('wallet_user_id') or st.session_state.user_id}`")
+    st.caption(
+        f"원본 전략 user_id: `{result.get('strategy_user_id')}` / "
+        f"백테스트 user_id: `{result.get('backtest_id') or result.get('wallet_user_id')}`"
+    )
 
-    render_wallet_snapshot(result.get("wallet"), "백테스트 후 시뮬레이션 지갑 상태")
+    render_wallet_snapshot(result.get("wallet"), "백테스트 후 DB 지갑 상태")
     render_session_stats(result.get("session_stats"), "백테스트 세션 통계")
 
     with st.expander("로드된 캔들 수", expanded=False):
         st.code(pretty_json(result.get("loaded_candles", {})), language="json")
+
+    with st.expander("생성된 backtest monitoring_targets", expanded=False):
+        st.code(pretty_json(result.get("generated_targets", [])), language="json")
 
     left, right = st.columns(2)
     with left:
@@ -529,10 +585,8 @@ def render_bat_daemon_dashboard() -> None:
 
 def render_backtest_dashboard() -> None:
     st.subheader("Bat Backtest")
-    st.caption("DB monitoring target을 기준으로 backtest.py 재생 흐름을 별도 UI에서 확인합니다.")
+    st.caption("원본 전략을 backtest_id로 복제한 뒤, 과거 tick 기반으로 run.py와 동일한 실행 흐름을 재생합니다.")
 
-    render_daemon_controls("backtest")
-    render_bat_target_panel()
     render_backtest_daemon_panel("backtest")
 
 

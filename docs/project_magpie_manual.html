@@ -978,7 +978,7 @@
                 <ul>
                   <li>BUY/SELL 시그널이 나오면 Owl을 거치지 않고 Daemon이 즉시 지갑 체결을 수행합니다.</li>
                   <li>BUY는 monitoring target의 <code>buy_allocation_pct</code>만큼 현재 원화 잔고를 사용해 체결합니다.</li>
-                  <li><code>dry_run</code>이면 BUY는 <code>HOLDING</code>, SELL은 <code>EXPIRED</code>로 시뮬레이션만 진행합니다.</li>
+                  <li><code>dry_run</code>이면 BUY는 <code>HOLDING</code>, SELL은 <code>EXPIRED</code>로 메모리상 백테스트 처리만 진행합니다.</li>
                   <li>매수 완료 후 상태는 <code>HOLDING</code>이 되고, 매도 완료 후 상태는 <code>EXPIRED</code>가 됩니다.</li>
                   <li>DB에 <code>EXPIRED</code> 타점이 보이면 Daemon이 Meerkat refresh 그래프를 호출해 새 <code>WAITING_BUY</code> 타점을 다시 계산합니다.</li>
                 </ul>
@@ -1330,8 +1330,8 @@
               <li>Meerkat의 <code>chart_only</code> 단계는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
               <li>BatDaemon이 발생시키는 BUY/SELL은 이제 실제 체결로 바로 이어집니다. Owl은 이 경로의 체결 검증에 더 이상 개입하지 않습니다.</li>
               <li><code>monitoring_targets.status</code>는 현재 코드 기준으로 <code>WAITING_BUY → HOLDING → EXPIRED → WAITING_BUY</code> 루프를 따릅니다.</li>
-              <li><code>bat_daemon/backtest.py</code>와 dashboard의 Bat Daemon 샘플도 이 직접 체결 로직을 dry-run 지갑 기준으로 최대한 동일하게 재생합니다.</li>
-              <li>dashboard와 <code>bat_daemon/backtest.py</code>는 기본적으로 같은 <code>user_id</code> 지갑을 쓰지만, 필요하면 별도 <code>wallet_user_id</code> 지갑을 선택해 시뮬레이션할 수 있습니다.</li>
+              <li><code>bat_daemon/backtest.py</code>와 dashboard의 Backtest 뷰도 이 직접 체결 로직을 backtest_id 전용 DB 문서 기준으로 최대한 동일하게 재생합니다.</li>
+              <li>dashboard와 <code>bat_daemon/backtest.py</code>는 원본 전략 <code>user_id</code>를 읽어 백테스트 전용 <code>backtest_id</code>의 전략/지갑/타점을 새로 만든 뒤 과거 tick으로 재생합니다.</li>
               <li>dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받도록 정리되어 있습니다.</li>
               <li><code>signal_trigger.py</code>와 <code>daily_report.py</code>는 지금 당장 엔트리포인트에 연결되어 있지 않지만, 그래프 분리 후보로 남아 있는 구조입니다.</li>
             </ul>
