@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from db.entity import TargetEntity
-from db.mongo import monitoring_targets_collection
+from db.mongo import get_monitoring_targets_collection
 from magpie_agent.agents.meerkat_scanner.schema import MonitoringTargets, TargetSchema
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ async def register_monitoring_targets_to_nest(
 
         print("\n" + "⚙️ " * 15)
         try:
-            result = await monitoring_targets_collection.update_one(filter_query, update_query, upsert=True)
+            result = await get_monitoring_targets_collection().update_one(filter_query, update_query, upsert=True)
         except Exception as e:
             logger.exception(
                 "타점 DB 저장 실패 (user_id: %s, coin: %s)",
@@ -61,7 +61,7 @@ async def register_monitoring_targets_to_nest(
 
 async def fetch_monitoring_targets_by_user(user_id: str) -> list[dict] | None:
     try:
-        cursor = monitoring_targets_collection.find({"user_id": user_id})
+        cursor = get_monitoring_targets_collection().find({"user_id": user_id})
         monitoring_targets = await cursor.to_list(length=100)
     except Exception as e:
         logger.exception("타점 DB 조회 실패 (user_id: %s)", user_id)

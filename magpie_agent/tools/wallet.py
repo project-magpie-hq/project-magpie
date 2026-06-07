@@ -7,7 +7,7 @@ from langgraph.prebuilt import InjectedState
 
 from bat_daemon.constant import SignalType
 from db.entity import AssetEntity, WalletEntity, WalletTradeSnapshot
-from db.mongo import wallets_collection
+from db.mongo import get_wallets_collection
 from magpie_agent.tools.telegram import send_telegram_message
 from magpie_agent.tools.trade_history import register_trade_history
 
@@ -22,7 +22,7 @@ async def register_wallet(user_id: str, initial_balance: float = 100000000) -> W
 
     print("\n" + "⚙️ " * 15)
     try:
-        result = await wallets_collection.replace_one(filter_query, wallet_entity.model_dump(), upsert=True)
+        result = await get_wallets_collection().replace_one(filter_query, wallet_entity.model_dump(), upsert=True)
     except Exception as e:
         logger.exception("가상 지갑 DB 저장 실패 (user_id: %s)", user_id)
         raise RuntimeError("가상 지갑 저장 중 DB 오류가 발생했습니다.") from e
@@ -41,7 +41,7 @@ async def register_wallet(user_id: str, initial_balance: float = 100000000) -> W
 
 async def fetch_wallet_by_user(user_id: str) -> WalletEntity | None:
     try:
-        wallet = await wallets_collection.find_one({"user_id": user_id})
+        wallet = await get_wallets_collection().find_one({"user_id": user_id})
     except Exception as e:
         logger.exception("가상 지갑 DB 조회 실패 (user_id: %s)", user_id)
         raise RuntimeError("가상 지갑 조회 중 DB 오류가 발생했습니다.") from e
@@ -146,14 +146,14 @@ async def get_wallet(state: Annotated[dict, InjectedState]) -> WalletEntity | No
 async def update_wallet(user_id: str, market: str, signal: SignalType, price: float, volume: float) -> WalletEntity:
     """체결 시 호출되어 지갑의 자산 상태를 수정합니다."""
 
-    current_wallet = await wallets_collection.find_one({"user_id": user_id})
+    current_wallet = await get_wallets_collection().find_one({"user_id": user_id})
     if not current_wallet:
         raise ValueError(f"사용자({user_id})의 가상 지갑을 찾을 수 없습니다. 초기화를 먼저 진행하세요.")
 
     wallet = WalletEntity.model_validate(current_wallet)
     try:
         apply_trade_to_wallet_entity(wallet, market, signal, price, volume)
-        await wallets_collection.replace_one({"user_id": user_id}, wallet.model_dump(by_alias=True))
+        await get_wallets_collection().replace_one({"user_id": user_id}, wallet.model_dump(by_alias=True))
     except Exception as e:
         logger.exception("가상 지갑 DB 수정 실패 (user_id: %s)", user_id)
         raise RuntimeError("가상 지갑 수정 중 DB 오류가 발생했습니다.") from e

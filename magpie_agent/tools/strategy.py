@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from db.entity import StrategyEntity
-from db.mongo import strategies_collection
+from db.mongo import get_strategies_collection
 from magpie_agent.agents.hawk_picker.schema import UpdateTargetCoinsInput
 from magpie_agent.agents.owl_director.schema import StrategySchema
 from magpie_agent.tools.telegram import send_telegram_message
@@ -39,7 +39,7 @@ async def register_strategy_to_nest(
 
     print("\n" + "⚙️ " * 15)
     try:
-        result = await strategies_collection.update_one(filter_query, update_query, upsert=True)
+        result = await get_strategies_collection().update_one(filter_query, update_query, upsert=True)
     except Exception as e:
         logger.exception("전략 DB 저장 실패 (user_id: %s)", user_id)
         raise RuntimeError("전략 저장 중 DB 오류가 발생했습니다.") from e
@@ -75,7 +75,7 @@ async def register_strategy_to_nest(
 
 async def fetch_strategy_by_user(user_id: str) -> dict | None:
     try:
-        strategy = await strategies_collection.find_one({"user_id": user_id})
+        strategy = await get_strategies_collection().find_one({"user_id": user_id})
     except Exception as e:
         logger.exception("전략 DB 조회 실패 (user_id: %s)", user_id)
         raise RuntimeError("전략 조회 중 DB 오류가 발생했습니다.") from e
@@ -122,7 +122,7 @@ async def update_strategy_target_coins(
 
     print("\n" + "⚙️ " * 15)
     try:
-        result = await strategies_collection.update_one(filter_query, update_query)
+        result = await get_strategies_collection().update_one(filter_query, update_query)
     except Exception as e:
         logger.exception("타겟 코인 업데이트 실패 (user_id: %s)", user_id)
         raise RuntimeError("타겟 코인 업데이트 중 DB 오류가 발생했습니다.") from e
