@@ -11,8 +11,6 @@ class TriggerBasis(StrEnum):
 class TargetStatus(StrEnum):
     WAITING_BUY = "WAITING_BUY"
     HOLDING = "HOLDING"
-    DONE = "DONE"
-    CHECKING = "CHECKING"
     EXPIRED = "EXPIRED"
 
 
@@ -31,6 +29,7 @@ class TargetSchema(BaseModel):
     # [가격 조건 - 매도]
     take_profit_price: float = Field(description="익절 목표가")
     stop_loss_price: float = Field(description="손절 방어선")
+    # [매수 비율]
     buy_allocation_pct: float = Field(
         default=0.01,
         ge=0.01,
