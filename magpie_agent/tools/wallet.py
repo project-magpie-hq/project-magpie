@@ -6,10 +6,9 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from bat_daemon.constant import SignalType
-from db.entity import AssetEntity, WalletEntity, WalletTradeSnapshot
+from db.entity import AssetEntity, TradeHistoryEntry, WalletEntity
 from db.mongo import get_wallets_collection
 from magpie_agent.tools.telegram import send_telegram_message
-from magpie_agent.tools.trade_history import register_trade_history
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,7 @@ def apply_trade_to_wallet_entity(
             wallet.assets[market] = asset
 
     wallet.updated_at = datetime.datetime.now(datetime.UTC)
-    wallet.trade_stats.last_trade = WalletTradeSnapshot(
+    executed_trade = TradeHistoryEntry(
         market=market,
         signal=signal,
         price=price,
@@ -125,12 +124,7 @@ def apply_trade_to_wallet_entity(
         total_price=total_price,
         executed_at=wallet.updated_at,
     )
-    if signal == SignalType.BUY:
-        wallet.trade_stats.total_buy_krw += total_price
-        wallet.trade_stats.buy_count += 1
-    else:
-        wallet.trade_stats.total_sell_krw += total_price
-        wallet.trade_stats.sell_count += 1
+    wallet.trade_history.append(executed_trade)
 
     return wallet
 
@@ -203,10 +197,9 @@ async def finalize_trade_execution(
     price: float,
     volume: float,
 ) -> WalletEntity:
-    """지갑 반영, 체결 이력 저장, 알림 전송까지 체결 마무리를 공통 처리합니다."""
+    """지갑 반영과 알림 전송까지 체결 마무리를 공통 처리합니다."""
 
     wallet = await update_wallet(user_id, market, signal, price, volume)
-    await register_trade_history(user_id, market, signal, price, volume)
     await notify_trade_execution(user_id, market, signal, price, volume, wallet)
     return wallet
 
@@ -260,7 +253,7 @@ async def process_trade_execution(
     market: str, signal: SignalType, price: float, volume: float, state: Annotated[dict, InjectedState]
 ) -> str:
     """
-    매매 체결 시 호출되어 지갑의 자산 상태를 수정하고, 체결 이력을 DB에 등록합니다.
+    매매 체결 시 호출되어 지갑의 자산 상태와 최근 체결 이력을 수정합니다.
     잔고가 부족하거나 조건이 맞지 않으면 에러 메시지를 반환합니다.
 
     Args:

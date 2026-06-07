@@ -34,7 +34,3 @@ def get_strategies_collection() -> AsyncIOMotorCollection:
 
 def get_wallets_collection() -> AsyncIOMotorCollection:
     return get_database()["wallets"]
-
-
-def get_trade_history_collection() -> AsyncIOMotorCollection:
-    return get_database()["trade_history"]

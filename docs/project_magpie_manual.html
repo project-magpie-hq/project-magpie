@@ -655,7 +655,7 @@
         <div class="metric">
           <small>Shared DB</small>
           <strong>The Nest</strong>
-          <code>strategies</code>, <code>monitoring_targets</code>, <code>wallets</code>, <code>trade_history</code>
+          <code>strategies</code>, <code>monitoring_targets</code>, <code>wallets</code>
         </div>
         <div class="metric">
           <small>Agent Chain</small>
@@ -793,8 +793,8 @@
                     <g id="node-db-wallet" class="node store">
                       <rect x="500" y="382" rx="20" ry="20" width="200" height="96"></rect>
                       <text x="600" y="422" text-anchor="middle">DB: wallets</text>
-                      <text x="600" y="445" class="small" text-anchor="middle">assets + trade_stats</text>
-                      <text x="600" y="465" class="small" text-anchor="middle">trade_history는 체결 시 추가 기록</text>
+                      <text x="600" y="445" class="small" text-anchor="middle">assets + trade_history</text>
+                      <text x="600" y="465" class="small" text-anchor="middle">체결 이력을 wallet 안에 계속 누적 보관</text>
                     </g>
 
                     <g id="node-db-targets" class="node store">
@@ -1258,8 +1258,7 @@
             <ul>
               <li><code>strategies</code>: Owl이 저장/수정, Hawk가 조회 및 <code>target_coins</code> 갱신, Meerkat이 조회합니다.</li>
               <li><code>monitoring_targets</code>: Meerkat이 최종 타점과 <code>buy_allocation_pct</code>를 저장하고, BatDaemon은 <code>WAITING_BUY</code>/<code>HOLDING</code>만 감시합니다. <code>EXPIRED</code>는 감시에서 제외됩니다.</li>
-              <li><code>wallets</code>: Owl Tools도 조회/수정할 수 있지만, 현재 BatDaemon도 BUY/SELL 시 직접 수정합니다. 지갑에는 자산 외에 <code>trade_stats</code>도 함께 저장됩니다.</li>
-              <li><code>trade_history</code>: BatDaemon 직접 체결과 Owl Tool 체결 모두 여기 기록되며, Meerkat이 다음 타점 계산 시 참고합니다.</li>
+              <li><code>wallets</code>: Owl Tools도 조회/수정할 수 있지만, 현재 BatDaemon도 BUY/SELL 시 직접 수정합니다. 지갑에는 자산 외에 전체 체결 이력인 <code>trade_history</code>도 함께 저장됩니다.</li>
               <li><code>BatDaemon</code>: 조건을 만족하면 즉시 체결하고, 매도 완료 후 EXPIRED 타점을 다시 Meerkat에 맡겨 갱신합니다.</li>
             </ul>
           </div>

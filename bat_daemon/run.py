@@ -49,6 +49,33 @@ class BatDaemon:
     async def run(self) -> None:
         await asyncio.gather(self.sync_targets_from_db(), self.listen_upbit_ws())
 
+    # DB sync loop
+    async def sync_targets_from_db(self) -> None:
+        """MongoDB 타겟을 주기적으로 새로고침하고 감시 목록 변경을 반영합니다."""
+        print("🦇 [Bat Daemon]: 감시 레이더 시작! MongoDB와 동기화를 시작합니다.")
+        while True:
+            # DB를 기준으로 현재 감시 대상을 다시 읽고, 변경이 있으면 웹소켓 재연결을 유도합니다.
+            try:
+                old_watching_coins = set(self.watching_coins)
+                await self.load_targets_from_db_once()
+                await self._maybe_schedule_expired_target_refresh()
+
+                if self.watching_coins != old_watching_coins:
+                    print(
+                        f"   🔄 [DB 동기화]: 감시 대상 코인 변경 감지 -> 기존: {old_watching_coins} / 변경: {self.watching_coins}"
+                    )
+                    if self.ws_connection:
+                        try:
+                            await self.ws_connection.close()
+                        except Exception as e:
+                            logger.warning("[WebSocket 종료 에러]: %s", e)
+                            print(f"   ❌ [WebSocket 종료 에러]: {e}")
+            except Exception as e:
+                logger.exception("[DB 동기화 에러]")
+                print(f"   ❌ [DB 에러]: {e}")
+
+            await asyncio.sleep(DB_SYNC_INTERVAL_SECONDS)
+
     async def load_targets_from_db_once(self) -> None:
         """MongoDB에 저장된 현재 모니터링 타겟을 한 번 로드합니다."""
         target_map = await fetch_target_map(self.user_id)
@@ -61,26 +88,26 @@ class BatDaemon:
         if self.dry_run and self.simulated_wallet is None:
             self.simulated_wallet = await fetch_wallet_by_user(self.wallet_user_id)
 
-    async def sync_targets_from_db(self) -> None:
-        print("🦇 [Bat Daemon]: 감시 레이더 시작! MongoDB와 동기화를 시작합니다.")
-        while True:
-            try:
-                await self._sync_targets_once()
-            except Exception as e:
-                logger.exception("[DB 동기화 에러]")
-                print(f"   ❌ [DB 에러]: {e}")
-
-            await asyncio.sleep(DB_SYNC_INTERVAL_SECONDS)
-
+    # WebSocket loop
     async def listen_upbit_ws(self) -> None:
         """업비트 웹소켓에 연결하여 1시간 캔들 데이터를 실시간으로 수신하고 타점을 검사합니다."""
         while True:
+            # 아직 감시 대상이 없으면 DB 동기화 루프가 대상을 채울 때까지 기다립니다.
             if not self.watching_coins:
                 await asyncio.sleep(DB_SYNC_INTERVAL_SECONDS)
                 continue
 
             try:
-                await self._stream_upbit_candles()
+                async with connect_upbit_ws() as websocket:
+                    self.ws_connection = websocket
+
+                    await subscribe_candles(websocket, self.user_id, self.watching_coins)
+                    print(f"\n📡 [WebSocket]: {list(self.watching_coins)} 1시간 캔들 스트림 수신 시작...\n")
+
+                    while True:
+                        coin, tick = await receive_candle_tick(websocket)
+                        if coin:
+                            await self.process_candle_tick(coin, tick)
             except ConnectionClosed as e:
                 print(
                     f"   ⚠️ [WebSocket]: 연결 종료(사유: {e}). 코인 목록 변경이거나 네트워크 이슈입니다. 재연결을 시도합니다..."
@@ -90,6 +117,7 @@ class BatDaemon:
                 print(f"   ❌ [WebSocket 에러]: {e}")
                 await asyncio.sleep(2)
 
+    # Candle / signal evaluation
     async def process_candle_tick(self, coin: str, tick: dict[str, Any]) -> None:
         """웹소켓으로 들어오는 실시간 캔들 조각을 받아 처리하는 메인 허브"""
         target = self.active_targets.get(coin)
@@ -104,8 +132,11 @@ class BatDaemon:
         await self._check_realtime_signals(parsed_tick, target)
 
         last_candle = self.current_candles.get(coin)
-        if is_new_candle(last_candle, parsed_tick.candle_time):
-            await self._evaluate_closed_candle_with_log(coin, last_candle, target)
+        if is_new_candle(last_candle, parsed_tick.candle_time) and last_candle:
+            print(
+                f"\n⏰ [캔들 마감 감지]: {coin}의 {last_candle['candle_date_time_kst']} 캔들 마감. CLOSE 조건 판독 시작."
+            )
+            await self._evaluate_closed_candle(coin, last_candle, target)
 
         self.current_candles[coin] = tick
 
@@ -115,55 +146,6 @@ class BatDaemon:
             target = self.active_targets.get(coin)
             if target:
                 await self._evaluate_closed_candle(coin, last_candle, target)
-
-    async def _sync_targets_once(self) -> None:
-        old_watching_coins = set(self.watching_coins)
-        await self.load_targets_from_db_once()
-        await self._maybe_schedule_expired_target_refresh()
-
-        if self.watching_coins == old_watching_coins:
-            return
-
-        print(
-            f"   🔄 [DB 동기화]: 감시 대상 코인 변경 감지 -> 기존: {old_watching_coins} / 변경: {self.watching_coins}"
-        )
-        await self._close_ws_connection()
-
-    async def _close_ws_connection(self) -> None:
-        if not self.ws_connection:
-            return
-
-        try:
-            await self.ws_connection.close()
-        except Exception as e:
-            logger.warning("[WebSocket 종료 에러]: %s", e)
-            print(f"   ❌ [WebSocket 종료 에러]: {e}")
-
-    async def _stream_upbit_candles(self) -> None:
-        async with connect_upbit_ws() as websocket:
-            self.ws_connection = websocket
-
-            await subscribe_candles(websocket, self.user_id, self.watching_coins)
-            print(f"\n📡 [WebSocket]: {list(self.watching_coins)} 1시간 캔들 스트림 수신 시작...\n")
-
-            while True:
-                await self._receive_ws_tick(websocket)
-
-    async def _receive_ws_tick(self, websocket: Any) -> None:
-        coin, tick = await receive_candle_tick(websocket)
-        if coin:
-            await self.process_candle_tick(coin, tick)
-
-    async def _evaluate_closed_candle_with_log(
-        self, coin: str, closed_candle: dict[str, Any] | None, target: TargetEntity
-    ) -> None:
-        if not closed_candle:
-            return
-
-        print(
-            f"\n⏰ [캔들 마감 감지]: {coin}의 {closed_candle['candle_date_time_kst']} 캔들 마감. CLOSE 조건 판독 시작."
-        )
-        await self._evaluate_closed_candle(coin, closed_candle, target)
 
     async def _check_realtime_signals(self, tick: CandleTick, target_entity: TargetEntity) -> None:
         """실시간(TOUCH) 조건 판별: 손절, 익절, TOUCH 방식의 매수"""
@@ -217,6 +199,7 @@ class BatDaemon:
 
         return rejection_reason is None
 
+    # Trade execution / state update
     async def _emit_signal(
         self, target_entity: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
     ) -> None:
@@ -331,10 +314,15 @@ class BatDaemon:
             self.current_candles.pop(target.target_coin, None)
             coin_removed = target.target_coin in self.watching_coins
             self.watching_coins.discard(target.target_coin)
-            if coin_removed:
-                await self._close_ws_connection()
+            if coin_removed and self.ws_connection:
+                try:
+                    await self.ws_connection.close()
+                except Exception as e:
+                    logger.warning("[WebSocket 종료 에러]: %s", e)
+                    print(f"   ❌ [WebSocket 종료 에러]: {e}")
             self._schedule_expired_target_refresh()
 
+    # Expired target refresh
     async def _maybe_schedule_expired_target_refresh(self) -> None:
         if self.dry_run or not self.enable_graph or self.refresh_graph is None:
             return

@@ -11,10 +11,10 @@
   - `signal_trigger.py`, `daily_report.py`: 현재는 직접 엔트리포인트 연결이 없는 준비된 분리 그래프
   - `shared.py`: Owl/Hawk/Meerkat 노드 및 edge 조립 헬퍼
 - `bat_daemon/`는 `monitoring_targets`를 기준으로 업비트 시장 데이터를 감시하고 시그널을 발생시킵니다.
-- `db/`는 `strategies`, `monitoring_targets`, `wallets`, `trade_history`를 관리합니다.
+- `db/`는 `strategies`, `monitoring_targets`, `wallets`를 관리합니다.
 - `docs/project_magpie_manual.html`은 현재 코드 기준 실행 플로우 설명서입니다.
 - `monitoring_targets`에는 가격 조건뿐 아니라 `buy_allocation_pct` 같은 포지션 비율 정보도 포함됩니다.
-- `wallets`에는 현재 자산 외에 `trade_stats`가 저장되어 최근 체결과 누적 매수/매도 규모를 함께 추적합니다.
+- `wallets`에는 현재 자산 외에 `trade_history`가 저장되어 Meerkat이 다음 타점 계산 시 과거 체결 맥락을 함께 참고합니다.
 - dashboard의 Bat Daemon dry-run/backtest는 기본적으로 현재 `user_id`의 지갑을 쓰지만, 필요하면 별도 `wallet_user_id` 지갑을 선택해 시뮬레이션할 수 있습니다.
 - dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받습니다.
 
@@ -40,7 +40,7 @@
   - `magpie_agent/graphs/` 내 builder 추가/삭제/사용처 변경
   - Owl / Hawk / Meerkat 라우팅 변경
   - BatDaemon 시그널 조건 변경
-  - `strategies`, `monitoring_targets`, `wallets`, `trade_history` 입출력 변경
+  - `strategies`, `monitoring_targets`, `wallets` 입출력 변경
 
 ## 작업 기본 원칙
 

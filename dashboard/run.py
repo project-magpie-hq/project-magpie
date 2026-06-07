@@ -17,7 +17,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from dashboard.session import init_session_state  # noqa: E402
 from dashboard.views.agent import render_agent_dashboard  # noqa: E402
-from dashboard.views.bat_daemon import render_bat_daemon_dashboard  # noqa: E402
+from dashboard.views.bat_daemon import (  # noqa: E402
+    render_backtest_dashboard,
+    render_bat_daemon_dashboard,
+    render_wallet_dashboard,
+)
 
 load_dotenv()
 
@@ -37,11 +41,15 @@ def main() -> None:
         text_alignment="center",
     )
 
-    agent_tab, daemon_tab = st.tabs(["Magpie Agent", "Bat Daemon"])
+    agent_tab, daemon_tab, backtest_tab, wallet_tab = st.tabs(["Magpie Agent", "Bat Daemon", "Backtest", "Wallet"])
     with agent_tab:
         render_agent_dashboard()
     with daemon_tab:
         render_bat_daemon_dashboard()
+    with backtest_tab:
+        render_backtest_dashboard()
+    with wallet_tab:
+        render_wallet_dashboard()
 
 
 if __name__ == "__main__":
