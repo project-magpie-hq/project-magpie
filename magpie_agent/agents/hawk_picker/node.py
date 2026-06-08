@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -47,7 +47,7 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
         agent = get_hawk_llm(phase=2)
         response_phase2: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
 
-        reasoning = (response_phase2.content or "").strip()
+        reasoning = cast(str, response_phase2.content or "").strip()
         target_coins: list[str] = []
         if response_phase2.tool_calls:
             for tc in response_phase2.tool_calls:

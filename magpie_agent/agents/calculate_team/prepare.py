@@ -98,15 +98,15 @@ async def prepare_calculate_data(state: CalculateTeamState) -> dict[str, Any]:
             wallet = await fetch_wallet_by_user(user_id)
             if wallet and hasattr(wallet, "trade_history") and wallet.trade_history:
                 trades = []
-                for t in wallet.trade_history[-10:]:  # 최근 10건
+                for trade_entry in wallet.trade_history[-10:]:  # 최근 10건
                     trades.append(
                         {
-                            "market": t.market,
-                            "signal": t.signal.value if hasattr(t.signal, "value") else str(t.signal),
-                            "price": t.price,
-                            "volume": t.volume,
-                            "total_price": t.total_price,
-                            "executed_at": str(t.executed_at),
+                            "market": trade_entry.market,
+                            "signal": trade_entry.signal.value if hasattr(trade_entry.signal, "value") else str(trade_entry.signal),
+                            "price": trade_entry.price,
+                            "volume": trade_entry.volume,
+                            "total_price": trade_entry.total_price,
+                            "executed_at": str(trade_entry.executed_at),
                         }
                     )
                 recent_trades = str(trades)

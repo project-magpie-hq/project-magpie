@@ -9,7 +9,6 @@ from db.entity import TargetEntity
 from db.mongo import get_monitoring_targets_collection
 from magpie_agent.agents.meerkat_scanner.schema import MonitoringTargets, TargetSchema
 
-
 logger = logging.getLogger(__name__)
 
 

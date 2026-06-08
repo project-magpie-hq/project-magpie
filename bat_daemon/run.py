@@ -10,7 +10,7 @@ from bat_daemon.market_data.candle import CandleTick, ClosedCandle, is_new_candl
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
 from bat_daemon.signals.rules import close_buy_rejection_reason, is_touch_buy_signal, should_check_close_buy
 from bat_daemon.stores.target_store import fetch_target_map, fetch_targets_by_status, update_target_status
-from db.entity import TargetEntity
+from db.entity import TargetEntity, WalletEntity
 from magpie_agent.agents.meerkat_scanner.schema import TargetStatus
 from magpie_agent.graphs.target_refresh import build_target_refresh_graph
 from magpie_agent.tools.telegram import send_telegram_message
@@ -47,7 +47,7 @@ class BatDaemon:
         self.refresh_task: asyncio.Task | None = None
         self.signal_history: list[dict[str, Any]] = []
         self.current_event_time: str | None = None
-        self.simulated_wallet = None
+        self.simulated_wallet: WalletEntity | None = None
         self.current_trigger_info: dict | None = None
 
     async def run(self) -> None:

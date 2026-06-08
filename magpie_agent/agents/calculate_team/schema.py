@@ -16,14 +16,14 @@ class CalculateTeamState(MessagesState):
 
     # ---------- 입력 (부모 그래프에서 전달) ----------
     user_id: str
-    strategy_details: str | None = None
-    chart_context: str | None = None
-    feedback_data: str | None = None
-    wallet_data: str | None = None
-    recent_trades: str | None = None
-    existing_targets_clean: str | None = None
-    trigger_info: str | None = None
-    target_coins: str | None = None
+    strategy_details: str | None = None  # type: ignore[misc]
+    chart_context: str | None = None  # type: ignore[misc]
+    feedback_data: str | None = None  # type: ignore[misc]
+    wallet_data: str | None = None  # type: ignore[misc]
+    recent_trades: str | None = None  # type: ignore[misc]
+    existing_targets_clean: str | None = None  # type: ignore[misc]
+    trigger_info: str | None = None  # type: ignore[misc]
+    target_coins: str | None = None  # type: ignore[misc]
 
     # ---------- 토론 상태 ----------
     bull_analysis: str | None
