@@ -12,6 +12,7 @@ from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.hawk import store_hawk_candidates
 from magpie_agent.tools.strategy import fetch_strategy_by_user, update_strategy_target_coins
+from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,14 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
             print("   ⚠️ [Hawk]: 후보 코인이 선정되지 않았습니다.")
         else:
             print(f"   🦅 [Hawk]: {len(candidates)}개 후보 코인 선정 -> {candidates}")
+            await send_telegram_message(
+                chat_id=state["user_id"],
+                text=(
+                    "🦅 [Hawk Phase 1 - 후보 선정]\n"
+                    f"차트 분석이 필요한 {len(candidates)}개 후보 코인이 선정되었습니다.\n"
+                    f"• 대상: {', '.join(candidates)}"
+                ),
+            )
 
         return {
             "messages": [response_phase1],
