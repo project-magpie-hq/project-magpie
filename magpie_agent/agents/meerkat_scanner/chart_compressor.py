@@ -13,7 +13,7 @@ HOUR_CANDLE_COUNT = 72
 ATR_PERIOD = 14
 
 
-async def generate_chart_context(target_coins: list[str], sim_time: str | None = None) -> str:
+async def generate_chart_context(target_coins: list[str], backtest_time: str | None = None) -> str:
     """
     타겟 코인 리스트를 받아, 일봉(Macro)과 1시간봉(Micro) 데이터를 비동기로 분석하고
     LLM이 이해하기 쉬운 텍스트 리포트로 압축합니다.
@@ -25,10 +25,10 @@ async def generate_chart_context(target_coins: list[str], sim_time: str | None =
     for coin in target_coins:
         try:
             df_day = await asyncio.to_thread(
-                pyupbit.get_ohlcv, coin, interval="day", count=DAY_CANDLE_COUNT, to=sim_time
+                pyupbit.get_ohlcv, coin, interval="day", count=DAY_CANDLE_COUNT, to=backtest_time
             )
             df_hour = await asyncio.to_thread(
-                pyupbit.get_ohlcv, coin, interval="minute60", count=HOUR_CANDLE_COUNT, to=sim_time
+                pyupbit.get_ohlcv, coin, interval="minute60", count=HOUR_CANDLE_COUNT, to=backtest_time
             )
         except Exception as e:
             logger.exception("[%s] 차트 데이터 API 호출 실패", coin)

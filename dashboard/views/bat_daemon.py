@@ -4,11 +4,21 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from bat_daemon.backtest import _candle_path, _load_historical_data, _to_upbit_tick
+from bat_daemon.backtest import (
+    _candle_path,
+    _load_backtest_universe,
+    _load_historical_data,
+    _to_upbit_tick,
+    prepare_backtest_environment,
+)
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
 from bat_daemon.run import BatDaemon
+from bat_daemon.session_stats import build_session_stats_from_signal_history
+from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
-from db.entity import TargetEntity
+from db.entity import TargetEntity, WalletEntity
+from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
+from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
 
 
 def target_to_row(target: TargetEntity) -> dict[str, Any]:
@@ -18,6 +28,7 @@ def target_to_row(target: TargetEntity) -> dict[str, Any]:
         "trigger": str(target.trigger_basis),
         "buy_lower": target.buy_price_lower_limit,
         "buy_upper": target.buy_price_upper_limit,
+        "buy_allocation_pct": target.buy_allocation_pct,
         "take_profit": target.take_profit_price,
         "stop_loss": target.stop_loss_price,
         "min_volume": target.min_volume_threshold,
@@ -37,7 +48,7 @@ def render_target_snapshot(targets: dict[str, TargetEntity], title: str) -> None
         st.warning("현재 DB에 monitoring target이 없습니다.")
         return
 
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
     with st.expander("Raw target JSON", expanded=False):
         raw_targets = {coin: target.model_dump(mode="json") for coin, target in targets.items()}
         st.code(pretty_json(raw_targets), language="json")
@@ -75,6 +86,10 @@ def signal_context_row(signal: dict[str, Any], target: TargetEntity | None) -> d
         "reason": signal.get("event_reason"),
         "target_status": signal.get("target_status"),
         "result_status": signal.get("result_status"),
+        "executed_volume": signal.get("executed_volume"),
+        "simulated_balance": signal.get("simulated_balance"),
+        "execution_error": signal.get("execution_error"),
+        "wallet_user_id": signal.get("wallet_user_id"),
     }
     if target:
         row.update(
@@ -82,6 +97,7 @@ def signal_context_row(signal: dict[str, Any], target: TargetEntity | None) -> d
                 "trigger": str(target.trigger_basis),
                 "buy_lower": target.buy_price_lower_limit,
                 "buy_upper": target.buy_price_upper_limit,
+                "buy_allocation_pct": target.buy_allocation_pct,
                 "take_profit": target.take_profit_price,
                 "stop_loss": target.stop_loss_price,
                 "min_volume": target.min_volume_threshold,
@@ -112,6 +128,7 @@ def tick_event_row(
         "status_after": str(target_after.status) if target_after else None,
         "signal": ", ".join(signal.get("signal_type", "") for signal in signals) or None,
         "event_reason": ", ".join(signal.get("event_reason", "") for signal in signals) or None,
+        "executed_volume": ", ".join(str(signal.get("executed_volume", "")) for signal in signals) or None,
     }
     if target_for_thresholds:
         row.update(
@@ -119,6 +136,7 @@ def tick_event_row(
                 "trigger": str(target_for_thresholds.trigger_basis),
                 "buy_lower": target_for_thresholds.buy_price_lower_limit,
                 "buy_upper": target_for_thresholds.buy_price_upper_limit,
+                "buy_allocation_pct": target_for_thresholds.buy_allocation_pct,
                 "take_profit": target_for_thresholds.take_profit_price,
                 "stop_loss": target_for_thresholds.stop_loss_price,
             }
@@ -126,12 +144,38 @@ def tick_event_row(
     return row
 
 
+def render_wallet_snapshot(wallet: WalletEntity | None, title: str) -> None:
+    st.markdown(f"#### {title}")
+    if wallet is None:
+        st.caption("지갑 정보가 없습니다.")
+        return
+
+    buy_count = sum(1 for trade in wallet.trade_history if getattr(trade.signal, "value", trade.signal) == "BUY")
+    sell_count = sum(1 for trade in wallet.trade_history if getattr(trade.signal, "value", trade.signal) == "SELL")
+    summary_cols = st.columns(4)
+    summary_cols[0].metric("KRW Balance", f"{wallet.balance:,.0f}")
+    summary_cols[1].metric("Assets", len([asset for asset in wallet.assets.values() if asset and asset.volume > 0]))
+    summary_cols[2].metric("Buy Count", buy_count)
+    summary_cols[3].metric("Sell Count", sell_count)
+    st.caption(f"누적 체결 이력: {len(wallet.trade_history)}건")
+
+    with st.expander("Wallet JSON", expanded=False):
+        st.code(pretty_json(wallet.model_dump(mode="json")), language="json")
+
+
 async def collect_live_daemon_sample(user_id: str, max_ticks: int, timeout_seconds: int) -> dict[str, Any]:
-    bat = BatDaemon(user_id, dry_run=True, enable_graph=False)
+    wallet_user_id = st.session_state.wallet_user_id or user_id
+    bat = BatDaemon(user_id, wallet_user_id=wallet_user_id, dry_run=True, enable_graph=False)
     await bat.load_targets_from_db_once()
 
     if not bat.watching_coins:
-        return {"targets": {}, "tick_rows": [], "signals": [], "error": "monitoring target이 없습니다."}
+        return {
+            "targets": {},
+            "tick_rows": [],
+            "signals": [],
+            "error": "monitoring target이 없습니다.",
+            "wallet_user_id": bat.wallet_user_id,
+        }
 
     tick_rows: list[dict[str, Any]] = []
     async with connect_upbit_ws() as websocket:
@@ -156,24 +200,38 @@ async def collect_live_daemon_sample(user_id: str, max_ticks: int, timeout_secon
         "targets": bat.active_targets,
         "tick_rows": tick_rows,
         "signals": bat.signal_history,
+        "session_stats": build_session_stats_from_signal_history(bat.signal_history),
         "current_candles": bat.current_candles,
+        "wallet": bat.simulated_wallet,
+        "wallet_user_id": bat.wallet_user_id,
     }
 
 
 async def collect_backtest_daemon_sample(
-    user_id: str,
+    strategy_user_id: str,
+    backtest_id: str,
     start: str,
     end: str,
+    initial_balance: float,
     max_tick_rows: int,
 ) -> dict[str, Any]:
-    bat = BatDaemon(user_id, dry_run=True, enable_graph=False)
+    await prepare_backtest_environment(strategy_user_id, backtest_id, start, initial_balance)
+
+    bat = BatDaemon(
+        backtest_id,
+        wallet_user_id=backtest_id,
+        dry_run=False,
+        enable_graph=True,
+        backtest_mode=True,
+    )
     await bat.load_targets_from_db_once()
     initial_targets = {coin: target.model_copy(deep=True) for coin, target in bat.active_targets.items()}
 
     if not bat.watching_coins:
         return backtest_result(initial_targets, bat.active_targets, "monitoring target이 없습니다.")
 
-    historical_data = await _load_historical_data(bat.watching_coins, start, end)
+    backtest_universe = await _load_backtest_universe(backtest_id)
+    historical_data = await _load_historical_data(backtest_universe or bat.watching_coins, start, end)
     if not historical_data:
         return backtest_result(initial_targets, bat.active_targets, "로드된 과거 캔들이 없습니다.")
 
@@ -189,9 +247,13 @@ async def collect_backtest_daemon_sample(
             candle = df.loc[candle_time]
             for _, trade_price in _candle_path(candle):
                 tick = _to_upbit_tick(coin, candle_time, candle, trade_price)
-                target_before = bat.active_targets.get(coin).model_copy(deep=True) if coin in bat.active_targets else None
+                target_before = (
+                    bat.active_targets.get(coin).model_copy(deep=True) if coin in bat.active_targets else None
+                )
                 signal_count_before = len(bat.signal_history)
                 await bat.process_candle_tick(coin, tick)
+                if bat.refresh_task is not None:
+                    await bat.wait_for_refresh_completion()
                 target_after = bat.active_targets.get(coin)
                 new_signals = bat.signal_history[signal_count_before:]
                 processed_ticks += 1
@@ -200,14 +262,21 @@ async def collect_backtest_daemon_sample(
                     tick_rows.append(tick_event_row(coin, tick, target_before, target_after, new_signals, "backtest"))
 
     await bat.flush_current_candles()
+    await bat.wait_for_refresh_completion()
 
     return {
         "initial_targets": initial_targets,
         "final_targets": bat.active_targets,
         "tick_rows": tick_rows,
         "signals": bat.signal_history,
+        "session_stats": build_session_stats_from_signal_history(bat.signal_history),
         "processed_ticks": processed_ticks,
         "loaded_candles": {coin: len(df) for coin, df in historical_data.items()},
+        "wallet": await fetch_wallet_by_user(backtest_id),
+        "wallet_user_id": backtest_id,
+        "strategy_user_id": strategy_user_id,
+        "backtest_id": backtest_id,
+        "generated_targets": await fetch_monitoring_targets_by_user(backtest_id),
     }
 
 
@@ -221,8 +290,14 @@ def backtest_result(
         "final_targets": final_targets,
         "tick_rows": [],
         "signals": [],
+        "session_stats": None,
         "processed_ticks": 0,
         "error": error,
+        "wallet": None,
+        "wallet_user_id": None,
+        "strategy_user_id": None,
+        "backtest_id": None,
+        "generated_targets": None,
     }
 
 
@@ -232,7 +307,20 @@ def render_signal_table(signals: list[dict[str, Any]], targets: dict[str, Target
         return
 
     rows = [signal_context_row(signal, targets.get(signal.get("target_coin"))) for signal in signals]
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+
+def render_session_stats(session_stats: Any | None, title: str) -> None:
+    st.markdown(f"#### {title}")
+    if session_stats is None:
+        st.caption("세션 통계가 없습니다.")
+        return
+
+    cols = st.columns(4)
+    cols[0].metric("Session Buy", session_stats.buy_count)
+    cols[1].metric("Session Sell", session_stats.sell_count)
+    cols[2].metric("Buy KRW", f"{session_stats.total_buy_krw:,.0f}")
+    cols[3].metric("Sell KRW", f"{session_stats.total_sell_krw:,.0f}")
 
 
 def render_tick_table(tick_rows: list[dict[str, Any]]) -> None:
@@ -240,13 +328,32 @@ def render_tick_table(tick_rows: list[dict[str, Any]]) -> None:
         st.caption("수집된 tick 이벤트가 없습니다.")
         return
 
-    st.dataframe(pd.DataFrame(tick_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(tick_rows), width="stretch", hide_index=True)
+
+
+def render_daemon_controls(namespace: str) -> None:
+    st.markdown("#### 실행 설정")
+    st.caption("Bat Daemon 샘플과 backtest에 필요한 monitoring target 식별자를 이 탭에서 직접 설정합니다.")
+
+    new_user_id = st.text_input(
+        "Target User ID",
+        value=st.session_state.user_id,
+        key=f"{namespace}_target_user_id",
+        help="monitoring_targets를 조회할 user_id입니다.",
+    )
+    if new_user_id != st.session_state.user_id:
+        st.session_state.user_id = new_user_id
 
 
 def render_bat_target_panel() -> None:
     with st.spinner("DB monitoring_targets를 불러오는 중..."):
-        bat = BatDaemon(st.session_state.user_id, dry_run=True, enable_graph=False)
-        asyncio.run(bat.load_targets_from_db_once())
+        bat = BatDaemon(
+            st.session_state.user_id,
+            wallet_user_id=st.session_state.wallet_user_id or st.session_state.user_id,
+            dry_run=True,
+            enable_graph=False,
+        )
+        run_async_task(bat.load_targets_from_db_once())
 
     current_snapshot = target_snapshot(bat.active_targets)
     changes = diff_target_snapshots(st.session_state.get("bat_target_snapshot"), current_snapshot)
@@ -256,30 +363,89 @@ def render_bat_target_panel() -> None:
     cols[1].metric("Watching Coins", len(bat.watching_coins))
     cols[2].metric("Changed Fields", len(changes))
     cols[3].metric("Mode", "dry-run")
+    st.caption(f"Target user_id: `{st.session_state.user_id}` / Wallet user_id: `{bat.wallet_user_id}`")
 
     render_target_snapshot(bat.active_targets, "DB monitoring_targets 현재 값")
 
     with st.expander("이전 새로고침 대비 변경 내역", expanded=bool(changes)):
         if changes:
-            st.dataframe(pd.DataFrame(changes), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(changes), width="stretch", hide_index=True)
         else:
             st.caption("이전 snapshot 대비 변경된 필드가 없습니다.")
 
     st.session_state.bat_target_snapshot = current_snapshot
 
 
-def render_live_daemon_panel() -> None:
+def render_wallet_control_panel(namespace: str) -> None:
+    st.markdown("#### 지갑 선택 및 생성")
+    effective_wallet_user_id = st.session_state.wallet_user_id or st.session_state.user_id
+    st.caption("Bat Daemon과 Backtest가 사용할 지갑을 이 탭에서 관리합니다.")
+
+    new_wallet_user_id = st.text_input(
+        "Wallet User ID",
+        value=st.session_state.wallet_user_id,
+        key=f"{namespace}_wallet_user_id",
+        help="dry-run과 backtest에서 사용할 wallets 조회 user_id입니다. 비우면 Target User ID와 동일하게 사용됩니다.",
+    )
+    normalized_wallet_user_id = new_wallet_user_id.strip()
+    if normalized_wallet_user_id != st.session_state.wallet_user_id:
+        st.session_state.wallet_user_id = normalized_wallet_user_id
+        effective_wallet_user_id = st.session_state.wallet_user_id or st.session_state.user_id
+
+    st.caption(f"현재 선택된 지갑 user_id는 `{effective_wallet_user_id}` 입니다.")
+
+    col_a, col_b = st.columns([1.3, 1])
+    initial_balance = col_a.number_input(
+        "새 지갑 초기 KRW",
+        min_value=0.0,
+        value=100000000.0,
+        step=1000000.0,
+        format="%.0f",
+        key=f"{namespace}_initial_balance",
+    )
+    if col_b.button(f"지갑 생성 / 초기화 ({effective_wallet_user_id})", width="stretch", key=f"{namespace}_reset_wallet"):
+        with st.spinner("지갑을 생성하거나 초기화하는 중..."):
+            try:
+                wallet = run_async_task(register_wallet(effective_wallet_user_id, float(initial_balance)))
+            except Exception as exc:
+                st.exception(exc)
+            else:
+                st.success(f"`{effective_wallet_user_id}` 지갑 생성/초기화 완료. 현재 잔고: {wallet.balance:,.0f} KRW")
+                st.session_state.bat_live_result = None
+                st.session_state.bat_backtest_result = None
+
+    try:
+        wallet = run_async_task(fetch_wallet_by_user(effective_wallet_user_id))
+    except Exception as exc:
+        st.exception(exc)
+    else:
+        render_wallet_snapshot(wallet, "DB wallets 현재 값")
+
+
+def render_live_daemon_panel(namespace: str = "bat_daemon") -> None:
     st.markdown("#### 실시간 tick 샘플")
-    st.caption("실제 DB target 및 Upbit websocket tick을 사용하되, 대시보드에서는 dry-run으로 조건만 판정합니다.")
+    st.caption(
+        "실제 DB target 및 Upbit websocket tick을 사용하되, 대시보드에서는 dry-run으로 조건만 판정합니다. "
+        f"지갑은 `{st.session_state.wallet_user_id or st.session_state.user_id}` 기준으로 불러옵니다."
+    )
 
     col_a, col_b = st.columns(2)
-    max_ticks = col_a.number_input("수집할 tick 개수", min_value=1, max_value=200, value=20, step=1)
-    timeout_seconds = col_b.number_input("tick 수신 timeout(초)", min_value=3, max_value=120, value=20, step=1)
+    max_ticks = col_a.number_input(
+        "수집할 tick 개수", min_value=1, max_value=200, value=20, step=1, key=f"{namespace}_max_ticks"
+    )
+    timeout_seconds = col_b.number_input(
+        "tick 수신 timeout(초)",
+        min_value=3,
+        max_value=120,
+        value=20,
+        step=1,
+        key=f"{namespace}_timeout_seconds",
+    )
 
-    if st.button("실시간 tick 수집 시작", use_container_width=True):
+    if st.button("실시간 tick 수집 시작", width="stretch", key=f"{namespace}_collect_live_ticks"):
         with st.spinner("Upbit websocket에서 tick을 수집하고 조건을 판정하는 중..."):
             try:
-                st.session_state.bat_live_result = asyncio.run(
+                st.session_state.bat_live_result = run_async_task(
                     collect_live_daemon_sample(st.session_state.user_id, int(max_ticks), int(timeout_seconds))
                 )
             except Exception as exc:
@@ -296,6 +462,10 @@ def render_live_daemon_panel() -> None:
     metric_cols[0].metric("수집 tick", len(result.get("tick_rows", [])))
     metric_cols[1].metric("감지 신호", len(result.get("signals", [])))
     metric_cols[2].metric("마지막 캔들", len(result.get("current_candles", {})))
+    st.caption(f"사용 지갑 user_id: `{result.get('wallet_user_id') or st.session_state.user_id}`")
+
+    render_wallet_snapshot(result.get("wallet"), "실시간 dry-run 지갑 상태")
+    render_session_stats(result.get("session_stats"), "실시간 run 세션 통계")
 
     st.markdown("##### Tick 변화와 조건 판정")
     render_tick_table(result.get("tick_rows", []))
@@ -307,20 +477,60 @@ def render_live_daemon_panel() -> None:
         st.code(pretty_json(result.get("current_candles", {})), language="json")
 
 
-def render_backtest_daemon_panel() -> None:
+def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     st.markdown("#### 과거 캔들 백테스트")
-    st.caption("DB의 현재 monitoring target을 기준으로 과거 1시간봉을 가상 tick으로 재생합니다.")
+    st.caption(
+        "원본 전략을 backtest_id 전용 전략/지갑/타점으로 복제한 뒤, 과거 1시간봉으로 run.py와 같은 체결 경로를 재생합니다."
+    )
 
-    col_a, col_b, col_c = st.columns([1, 1, 1])
-    start = col_a.text_input("시작 일시", value="2024-01-01 00:00:00")
-    end = col_b.text_input("종료 일시", value="2024-02-01 00:00:00")
-    max_tick_rows = col_c.number_input("표시할 tick row 상한", min_value=20, max_value=5000, value=500, step=20)
+    col_a, col_b = st.columns(2)
+    strategy_user_id = col_a.text_input(
+        "Strategy User ID",
+        value=st.session_state.get("backtest_strategy_user_id_value", st.session_state.user_id),
+        key=f"{namespace}_strategy_user_id",
+        help="원본 strategies를 복사할 user_id입니다.",
+    )
+    backtest_id = col_b.text_input(
+        "Backtest ID",
+        value=st.session_state.get("backtest_id_value", "backtest_001"),
+        key=f"{namespace}_backtest_id",
+        help="전략/지갑/타점을 격리 저장할 백테스트 전용 user_id입니다.",
+    )
+    st.session_state.backtest_strategy_user_id_value = strategy_user_id
+    st.session_state.backtest_id_value = backtest_id
 
-    if st.button("백테스트 실행", use_container_width=True):
-        with st.spinner("과거 캔들을 로드하고 BatDaemon 판정 로직으로 재생하는 중..."):
+    col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1])
+    start = col_c.text_input("시작 일시", value="2024-01-01 00:00:00", key=f"{namespace}_start")
+    end = col_d.text_input("종료 일시", value="2024-02-01 00:00:00", key=f"{namespace}_end")
+    initial_balance = col_e.number_input(
+        "초기 KRW",
+        min_value=0.0,
+        value=100000000.0,
+        step=1000000.0,
+        format="%.0f",
+        key=f"{namespace}_initial_balance",
+    )
+    max_tick_rows = col_f.number_input(
+        "표시할 tick row 상한",
+        min_value=20,
+        max_value=5000,
+        value=500,
+        step=20,
+        key=f"{namespace}_max_tick_rows",
+    )
+
+    if st.button("백테스트 실행", width="stretch", key=f"{namespace}_run_backtest"):
+        with st.spinner("백테스트 전용 전략/지갑/타점을 준비하고 과거 캔들을 재생하는 중..."):
             try:
-                st.session_state.bat_backtest_result = asyncio.run(
-                    collect_backtest_daemon_sample(st.session_state.user_id, start, end, int(max_tick_rows))
+                st.session_state.bat_backtest_result = run_async_task(
+                    collect_backtest_daemon_sample(
+                        strategy_user_id,
+                        backtest_id,
+                        start,
+                        end,
+                        float(initial_balance),
+                        int(max_tick_rows),
+                    )
                 )
             except Exception as exc:
                 st.session_state.bat_backtest_result = backtest_result({}, {}, str(exc))
@@ -338,8 +548,23 @@ def render_backtest_daemon_panel() -> None:
     metric_cols[2].metric("감지 신호", f"{len(result.get('signals', [])):,}")
     metric_cols[3].metric("로드 캔들", f"{sum(result.get('loaded_candles', {}).values()):,}")
 
+    st.info(
+        "이 백테스트는 원본 전략을 backtest_id로 복제한 뒤 실제 run.py와 같은 체결 경로를 사용합니다. "
+        "차이점은 실시간 websocket 대신 과거 1시간봉 tick 경로를 재생한다는 점뿐입니다."
+    )
+    st.caption(
+        f"원본 전략 user_id: `{result.get('strategy_user_id')}` / "
+        f"백테스트 user_id: `{result.get('backtest_id') or result.get('wallet_user_id')}`"
+    )
+
+    render_wallet_snapshot(result.get("wallet"), "백테스트 후 DB 지갑 상태")
+    render_session_stats(result.get("session_stats"), "백테스트 세션 통계")
+
     with st.expander("로드된 캔들 수", expanded=False):
         st.code(pretty_json(result.get("loaded_candles", {})), language="json")
+
+    with st.expander("생성된 backtest monitoring_targets", expanded=False):
+        st.code(pretty_json(result.get("generated_targets", [])), language="json")
 
     left, right = st.columns(2)
     with left:
@@ -356,12 +581,22 @@ def render_backtest_daemon_panel() -> None:
 
 def render_bat_daemon_dashboard() -> None:
     st.subheader("Bat Daemon Monitor")
-    st.caption("DB monitoring target, 실시간/과거 tick 변화, 조건 발동 지점을 dry-run으로 관찰합니다.")
+    st.caption("DB monitoring target과 실시간 tick 변화를 기준으로 run.py의 감시 흐름을 dry-run으로 관찰합니다.")
 
+    render_daemon_controls("bat_daemon")
     render_bat_target_panel()
+    render_live_daemon_panel("bat_daemon")
 
-    live_tab, backtest_tab = st.tabs(["실시간 run.py 샘플", "backtest.py 재생"])
-    with live_tab:
-        render_live_daemon_panel()
-    with backtest_tab:
-        render_backtest_daemon_panel()
+
+def render_backtest_dashboard() -> None:
+    st.subheader("Bat Backtest")
+    st.caption("원본 전략을 backtest_id로 복제한 뒤, 과거 tick 기반으로 run.py와 동일한 실행 흐름을 재생합니다.")
+
+    render_backtest_daemon_panel("backtest")
+
+
+def render_wallet_dashboard() -> None:
+    st.subheader("Wallet")
+    st.caption("dry-run과 backtest에서 사용할 지갑을 선택하고, 현재 DB 지갑 상태를 확인합니다.")
+
+    render_wallet_control_panel("wallet")

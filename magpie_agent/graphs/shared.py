@@ -137,15 +137,17 @@ def add_hawk_tools_conditional_edges(workflow):
     return workflow
 
 
-def add_meerkat_conditional_edges(workflow):
+def add_meerkat_conditional_edges(workflow, meerkat_routes=None):
     """Add Meerkat Scanner conditional routing edges."""
+    if meerkat_routes is None:
+        meerkat_routes = {
+            NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
+            NodeNames.MEERKAT_TOOLS.value: NodeNames.MEERKAT_TOOLS.value,
+        }
     workflow.add_conditional_edges(
         NodeNames.MEERKAT_SCANNER.value,
         route_after_meerkat,
-        {
-            NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
-            NodeNames.MEERKAT_TOOLS.value: NodeNames.MEERKAT_TOOLS.value,
-        },
+        meerkat_routes,
     )
     return workflow
 

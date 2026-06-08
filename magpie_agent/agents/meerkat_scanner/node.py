@@ -27,7 +27,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     meerkat_mode = state.get("meerkat_mode")
     is_chart_only = meerkat_mode == "chart_only"
 
-    sim_time: str | None = state.get("current_sim_time")  # 라이브면 None, 테스트면 과거 시간
+    backtest_time: str | None = state.get("backtest_time")  # 라이브면 None, 백테스트면 과거 시간
 
     if is_chart_only:
         print("\n🦦 [Meerkat]: 차트 분석 전용 모드로 실행합니다...")
@@ -39,7 +39,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
             return {"messages": []}
 
         try:
-            chart_context = await generate_chart_context(target_coins, sim_time)
+            chart_context = await generate_chart_context(target_coins, backtest_time)
         except Exception as e:
             logger.exception("차트 컨텍스트 생성 실패: %s", target_coins)
             raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
@@ -68,7 +68,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
     strategy = StrategySchema.model_validate(current_strategy)
 
     try:
-        chart_context = await generate_chart_context(strategy.target_coins, sim_time)
+        chart_context = await generate_chart_context(strategy.target_coins, backtest_time)
     except Exception as e:
         logger.exception("차트 컨텍스트 생성 실패: %s", strategy.target_coins)
         raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
@@ -98,6 +98,24 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
             {current_wallet.model_dump_json(indent=2)}
         """
 
+    recent_trades = list(reversed(current_wallet.trade_history[-12:])) if current_wallet else []
+    if recent_trades:
+        trade_summaries = [
+            {
+                "market": trade.market,
+                "signal": trade.signal.value if hasattr(trade.signal, "value") else trade.signal,
+                "price": trade.price,
+                "volume": trade.volume,
+                "total_price": trade.total_price,
+                "executed_at": trade.executed_at.isoformat(),
+            }
+            for trade in recent_trades
+        ]
+        user_input += f"""
+            [최근 매매 기록]
+            {trade_summaries}
+        """
+
     # 2. 현재 등록된 타점 정보 추가
     existing_targets = await fetch_monitoring_targets_by_user(state["user_id"])
     if existing_targets:
@@ -111,6 +129,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
                     "buy_price_lower_limit": t.get("buy_price_lower_limit"),
                     "take_profit_price": t.get("take_profit_price"),
                     "stop_loss_price": t.get("stop_loss_price"),
+                    "buy_allocation_pct": t.get("buy_allocation_pct"),
                 }
             )
 

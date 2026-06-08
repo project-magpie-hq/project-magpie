@@ -1,10 +1,10 @@
-import asyncio
 import json
 from typing import Any
 
 import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessage
 
+from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
 
 NODE_OWL_DIRECTOR = "owl_director"
@@ -249,40 +249,76 @@ def render_agent_history() -> None:
         st.divider()
 
 
+def render_agent_controls() -> None:
+    st.markdown("#### 실행 설정")
+    st.caption("Magpie Agent 실행에 필요한 사용자 식별자와 thread를 이 탭에서 직접 설정합니다.")
+
+    col_a, col_b, col_c = st.columns([1.15, 1.15, 0.7])
+    new_user_id = col_a.text_input(
+        "User ID",
+        value=st.session_state.user_id,
+        help="strategies / wallets / monitoring_targets 조회 및 저장에 사용됩니다.",
+    )
+    new_thread_id = col_b.text_input(
+        "Thread ID",
+        value=st.session_state.thread_id,
+        help="같은 값을 유지하면 LangGraph MemorySaver가 대화 맥락을 이어갑니다.",
+    )
+    if col_c.button("대화 기록 초기화", type="secondary", width="stretch"):
+        st.session_state.history = []
+        st.rerun()
+
+    if new_user_id != st.session_state.user_id:
+        st.session_state.user_id = new_user_id
+    if new_thread_id != st.session_state.thread_id:
+        st.session_state.thread_id = new_thread_id
+
+
+def submit_agent_message() -> None:
+    user_input = st.session_state.get("agent_chat_input", "").strip()
+    if user_input:
+        st.session_state.agent_pending_input = user_input
+
+
 def render_agent_dashboard() -> None:
+    render_agent_controls()
     render_agent_history()
 
-    user_input = st.chat_input("Owl Director에게 메시지를 보내세요...")
-    if not user_input:
-        return
+    user_input = st.session_state.pop("agent_pending_input", None)
+    if user_input:
+        config = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+        with st.chat_message("user"):
+            st.write(user_input)
 
-    with st.chat_message("user"):
-        st.write(user_input)
+        events: list[dict] = []
+        final_state: dict = {}
 
-    events: list[dict] = []
-    final_state: dict = {}
+        with st.status("🤖 에이전트 실행 중...", expanded=True) as status:
+            try:
+                events, final_state = run_async_task(astream_and_render(user_input, config))
+                status.update(label="✅ 실행 완료", state="complete", expanded=False)
+            except Exception as exc:
+                st.exception(exc)
+                status.update(label="❌ 오류 발생", state="error")
 
-    with st.status("🤖 에이전트 실행 중...", expanded=True) as status:
-        try:
-            events, final_state = asyncio.run(astream_and_render(user_input, config))
-            status.update(label="✅ 실행 완료", state="complete", expanded=False)
-        except Exception as exc:
-            st.exception(exc)
-            status.update(label="❌ 오류 발생", state="error")
+        render_state(final_state)
+        final_response = extract_final_owl_response(events)
 
-    render_state(final_state)
-    final_response = extract_final_owl_response(events)
+        if final_response:
+            with st.chat_message("assistant"):
+                st.write(final_response)
 
-    if final_response:
-        with st.chat_message("assistant"):
-            st.write(final_response)
+        st.session_state.history.append(
+            {
+                "user_input": user_input,
+                "events": events,
+                "final_response": final_response,
+            }
+        )
 
-    st.session_state.history.append(
-        {
-            "user_input": user_input,
-            "events": events,
-            "final_response": final_response,
-        }
+    st.chat_input(
+        "Owl Director에게 메시지를 보내세요...",
+        key="agent_chat_input",
+        on_submit=submit_agent_message,
     )
