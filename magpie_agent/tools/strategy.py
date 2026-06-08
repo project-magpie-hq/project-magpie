@@ -155,15 +155,6 @@ async def update_strategy_target_coins(
 
     if result.modified_count > 0:
         print(f"🪹 [The Nest]: 타겟 코인이 성공적으로 업데이트되었습니다! -> {target_coins}")
-        await send_telegram_message(
-            chat_id=user_id,
-            text=(
-                "🦅 [종목 변경]\n"
-                f"Hawk Picker가 최종 종목을 선정하여 전략에 반영했습니다.\n"
-                f"• 선정 종목: {', '.join(target_coins)}\n"
-                f"• Hawk Picker가 위 종목들의 타점을 계산 중입니다."
-            ),
-        )
     else:
         print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
     print("-" * 50)

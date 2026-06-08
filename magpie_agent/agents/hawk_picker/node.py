@@ -47,6 +47,26 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
         agent = get_hawk_llm(phase=2)
         response_phase2: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
 
+        reasoning = (response_phase2.content or "").strip()
+        target_coins: list[str] = []
+        if response_phase2.tool_calls:
+            for tc in response_phase2.tool_calls:
+                if tc["name"] == "update_strategy_target_coins":
+                    target_coins = tc["args"].get("target_coins", [])
+
+        if reasoning and target_coins:
+            reason_snippet = reasoning[:500]
+            await send_telegram_message(
+                chat_id=state["user_id"],
+                text=(
+                    "🦅 [최종 종목 선정]\n"
+                    f"Hawk Picker가 최종 종목을 선정했습니다.\n"
+                    f"• 선정 종목: {', '.join(target_coins)}\n"
+                    f"• Calculate Team이 타점을 계산합니다.\n\n"
+                    f"📝 선정 근거\n{reason_snippet}{'...' if len(reasoning) > 500 else ''}"
+                ),
+            )
+
         return {
             "messages": [response_phase2],
         }
@@ -86,14 +106,6 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
             print("   ⚠️ [Hawk]: 후보 코인이 선정되지 않았습니다.")
         else:
             print(f"   🦅 [Hawk]: {len(candidates)}개 후보 코인 선정 -> {candidates}")
-            await send_telegram_message(
-                chat_id=state["user_id"],
-                text=(
-                    "🦅 [Hawk Phase 1 - 후보 선정]\n"
-                    f"차트 분석이 필요한 {len(candidates)}개 후보 코인이 선정되었습니다.\n"
-                    f"• 대상: {', '.join(candidates)}"
-                ),
-            )
 
         return {
             "messages": [response_phase1],

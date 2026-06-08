@@ -34,13 +34,8 @@ async def bull_first_node(state: CalculateTeamState) -> dict:
 
 async def bull_rebuttal_node(state: CalculateTeamState) -> dict:
     """Bull 반박: Bear의 분석을 읽고 Bull 관점에서 반박/보완한다."""
-    extra_context = (
-        "\n\n[Bear의 초기 분석 (반박 대상)]\n"
-        + (state.get("bear_analysis") or "(Bear 분석 없음)")
-    )
-    return await _run_bull_or_bear(
-        state, "prompt_bull.md", "bull_rebuttal", "Bull", extra_context=extra_context
-    )
+    extra_context = "\n\n[Bear의 초기 분석 (반박 대상)]\n" + (state.get("bear_analysis") or "(Bear 분석 없음)")
+    return await _run_bull_or_bear(state, "prompt_bull.md", "bull_rebuttal", "Bull", extra_context=extra_context)
 
 
 # =========================================================================
@@ -55,13 +50,8 @@ async def bear_first_node(state: CalculateTeamState) -> dict:
 
 async def bear_rebuttal_node(state: CalculateTeamState) -> dict:
     """Bear 반박: Bull의 분석을 읽고 Bear 관점에서 반박/보완한다."""
-    extra_context = (
-        "\n\n[Bull의 초기 분석 (반박 대상)]\n"
-        + (state.get("bull_analysis") or "(Bull 분석 없음)")
-    )
-    return await _run_bull_or_bear(
-        state, "prompt_bear.md", "bear_rebuttal", "Bear", extra_context=extra_context
-    )
+    extra_context = "\n\n[Bull의 초기 분석 (반박 대상)]\n" + (state.get("bull_analysis") or "(Bull 분석 없음)")
+    return await _run_bull_or_bear(state, "prompt_bear.md", "bear_rebuttal", "Bear", extra_context=extra_context)
 
 
 async def _run_bull_or_bear(
@@ -136,8 +126,10 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         raise RuntimeError("Dolphin 에이전트 실행 중 오류가 발생했습니다.") from e
 
     # Bull/Bear 토론 요약 + Dolphin 판단 근거를 로깅 및 Telegram 전송
-    bull_view = (state.get("bull_analysis") or "")[:200]
-    bear_view = (state.get("bear_analysis") or "")[:200]
+    bull_view = (state.get("bull_analysis") or "")[:400]
+    bear_view = (state.get("bear_analysis") or "")[:400]
+    bull_rebuttal_view = (state.get("bull_rebuttal") or "")[:300]
+    bear_rebuttal_view = (state.get("bear_rebuttal") or "")[:300]
     dolphin_reasoning = (response.content or "")[:800]
 
     print(f"   🐬 [Dolphin]: 최종 타점 계산 완료 — 총 {len(response.tool_calls or [])}개 도구 호출")
@@ -147,9 +139,11 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
     if dolphin_reasoning:
         tg_summary = (
             f"🐬 [Dolphin 판결]\n\n"
-            f"📈 Bull 관점\n{bull_view}{'...' if len((state.get('bull_analysis') or '')) > 200 else ''}\n\n"
-            f"📉 Bear 관점\n{bear_view}{'...' if len((state.get('bear_analysis') or '')) > 200 else ''}\n\n"
-            f"⚖️ Dolphin 판단\n{dolphin_reasoning}{'...' if len((response.content or '')) > 800 else ''}"
+            f"📈 Bull 관점\n{bull_view}{'...' if len(state.get('bull_analysis') or '') > 400 else ''}\n\n"
+            f"📉 Bear 관점\n{bear_view}{'...' if len(state.get('bear_analysis') or '') > 400 else ''}\n\n"
+            f"🔄 Bull 반박\n{bull_rebuttal_view}{'...' if len(state.get('bull_rebuttal') or '') > 300 else ''}\n\n"
+            f"🔄 Bear 반박\n{bear_rebuttal_view}{'...' if len(state.get('bear_rebuttal') or '') > 300 else ''}\n\n"
+            f"⚖️ Dolphin 판단\n{dolphin_reasoning}{'...' if len(response.content or '') > 800 else ''}"
         )
         await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
 
@@ -172,5 +166,5 @@ def _get_dolphin_llm() -> Runnable[LanguageModelInput, AIMessage]:
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
     return llm.bind_tools(
         [register_monitoring_targets_to_nest],
-        tool_choice="register_monitoring_targets_to_nest",
+        tool_choice="any",
     )
