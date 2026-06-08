@@ -13,6 +13,7 @@ from bat_daemon.stores.target_store import fetch_target_map, fetch_targets_by_st
 from db.entity import TargetEntity
 from magpie_agent.agents.meerkat_scanner.schema import TargetStatus
 from magpie_agent.graphs.target_refresh import build_target_refresh_graph
+from magpie_agent.tools.telegram import send_telegram_message
 from magpie_agent.tools.wallet import (
     apply_trade_to_wallet_entity,
     execute_trade_for_daemon,
@@ -377,6 +378,9 @@ class BatDaemon:
         if not expired_targets:
             return
 
+        expired_coins = [t.target_coin for t in expired_targets]
+        print(f"   ♻️ [Target Refresh]: {len(expired_coins)}개 EXPIRED 타점 재계산 시작 -> {expired_coins}")
+
         await invoke_graph_for_target_refresh(
             self.refresh_graph,
             self.user_id,
@@ -385,6 +389,22 @@ class BatDaemon:
         )
         self.current_trigger_info = None
         await self.load_targets_from_db_once()
+
+        # 갱신 후 WAITING_BUY 상태 타점 확인
+        updated = await fetch_targets_by_status(self.user_id, [TargetStatus.WAITING_BUY])
+        new_coins = [t.target_coin for t in updated if t.target_coin in expired_coins]
+        print(f"   ✅ [Target Refresh]: {len(new_coins)}개 타점이 WAITING_BUY로 갱신됨 -> {new_coins}")
+
+        if not self.dry_run:
+            await send_telegram_message(
+                chat_id=self.user_id,
+                text=(
+                    "♻️ [타점 갱신 완료]\n"
+                    f"EXPIRED 상태였던 {len(expired_coins)}개 타점이 재계산되었습니다.\n"
+                    f"• 만료 코인: {', '.join(expired_coins)}\n"
+                    f"• 갱신된 코인: {', '.join(new_coins) if new_coins else '없음'}"
+                ),
+            )
 
     def _on_refresh_task_done(self, task: asyncio.Task) -> None:
         try:
