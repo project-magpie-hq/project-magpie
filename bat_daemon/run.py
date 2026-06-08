@@ -47,6 +47,7 @@ class BatDaemon:
         self.signal_history: list[dict[str, Any]] = []
         self.current_event_time: str | None = None
         self.simulated_wallet = None
+        self.current_trigger_info: dict | None = None
 
     async def run(self) -> None:
         await asyncio.gather(self.sync_targets_from_db(), self.listen_upbit_ws())
@@ -309,6 +310,15 @@ class BatDaemon:
             return
 
         new_status = TargetStatus.HOLDING if signal_type == SignalType.BUY else TargetStatus.EXPIRED
+
+        # Store trigger info before state update so _refresh_expired_targets can pass it to graph
+        self.current_trigger_info = {
+            "target_coin": target.target_coin,
+            "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+            "price": current_price,
+            "event_reason": event_reason,
+        }
+
         await self._apply_post_trade_state(target, new_status)
         self.signal_history[-1]["result_status"] = new_status.value
         self.signal_history[-1]["executed_volume"] = volume
@@ -371,7 +381,9 @@ class BatDaemon:
             self.refresh_graph,
             self.user_id,
             backtest_time=self.current_event_time if self.backtest_mode else None,
+            trigger_info=self.current_trigger_info,
         )
+        self.current_trigger_info = None
         await self.load_targets_from_db_once()
 
     def _on_refresh_task_done(self, task: asyncio.Task) -> None:

@@ -24,11 +24,33 @@ class MagpieState(MessagesState):
     next_agent: AgentEnum | None
     # 백테스트에서 차트/타점 계산 기준이 되는 과거 시점
     backtest_time: str | None
+    # Daemon에서 트리거된 시그널 정보 (어떤 코인, 가격, 사유)
+    trigger_info: dict[str, Any] | None
 
     # 실제 체결/주문 결과(향후 execution tool 연동용)
     execution_result: dict[str, Any] | None
 
-    # Hawk Picker: 1차 선정한 후보 코인 리스트 (Phase 1 → Meerkat chart-only 전달용)
+    # Hawk Picker: 1차 선정한 후보 코인 리스트 (Phase 1 → Meerkat 전달용)
+    # Meerkat은 이 값이 존재하면 Hawk으로 복귀, 없으면 Calculate Team으로 라우팅
     hawk_candidates: list[str] | None
-    # Meerkat Scanner: 차트 분석 전용 모드 여부 ("chart_only" or None = 전체 타점 계산)
-    meerkat_mode: str | None
+
+    # --- Calculate Team (Bull/Bear/Dolphin) 전용 필드 ---
+
+    # Meerkat Scanner가 생성한 차트 분석 결과 (Calculate Team 입력용)
+    chart_context: str | None
+    # 전략 상세 (JSON string)
+    strategy_details: str | None
+    # 직전 타점 피드백
+    feedback_data: str | None
+    # 지갑 정보 (JSON string)
+    wallet_data: str | None
+    # 최근 매매 기록 (JSON string)
+    recent_trades: str | None
+    # 기존 타점 정보 (JSON string)
+    existing_targets_clean: str | None
+
+    # Bull/Bear/Dolphin 토론 상태
+    bull_analysis: str | None
+    bear_analysis: str | None
+    bull_rebuttal: str | None
+    bear_rebuttal: str | None
