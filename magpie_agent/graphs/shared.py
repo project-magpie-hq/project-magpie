@@ -9,7 +9,7 @@ from magpie_agent.agents.hawk_picker.node import (
     route_after_hawk,
     route_after_hawk_tools,
 )
-from magpie_agent.agents.meerkat_scanner.node import meerkat_node, route_after_meerkat
+from magpie_agent.agents.meerkat_scanner.node import meerkat_node
 from magpie_agent.agents.owl_director.node import owl_node, route_after_owl
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.hawk import store_hawk_candidates
@@ -20,7 +20,7 @@ from magpie_agent.tools.strategy import (
     register_strategy_to_nest,
     update_strategy_target_coins,
 )
-from magpie_agent.tools.wallet import get_wallet, process_trade_execution
+from magpie_agent.tools.wallet import get_wallet
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,6 @@ def add_owl_and_tools(workflow, state_cls=MagpieState):
                 get_my_active_strategy,
                 transfer_to_agent,
                 get_wallet,
-                process_trade_execution,
             ]
         ),
     )
@@ -61,10 +60,29 @@ def add_hawk_and_tools(workflow):
 def add_meerkat_and_tools(workflow):
     """Add Meerkat Scanner node and its tool node to the workflow."""
     workflow.add_node(NodeNames.MEERKAT_SCANNER.value, meerkat_node)
+    add_calculate_team_tools(workflow)
+    return workflow
+
+
+def add_calculate_team_tools(workflow):
+    """Add tool execution node for Calculate Team's tool calls (target registration).
+
+    Bull/Bear/Dolphin 토론 후 Dolphin이 register_monitoring_targets_to_nest
+    도구를 호출하면, 이 ToolNode가 해당 도구를 실행하여 결과를 DB에 저장한다.
+    """
     workflow.add_node(
-        NodeNames.MEERKAT_TOOLS.value,
+        NodeNames.CALCULATE_TEAM_TOOLS.value,
         ToolNode([register_monitoring_targets_to_nest]),
     )
+    return workflow
+
+
+def add_calculate_team(workflow):
+    """Add Calculate Team (Bull/Bear/Dolphin debate) subgraph to the workflow."""
+    from magpie_agent.agents.calculate_team.subgraph import build_calculate_team_subgraph
+
+    subgraph = build_calculate_team_subgraph()
+    workflow.add_node(NodeNames.CALCULATE_TEAM.value, subgraph)
     return workflow
 
 
@@ -77,14 +95,13 @@ def add_start_to_owl_edge(workflow):
 def add_owl_conditional_edges(workflow, owl_routes=None):
     """Add Owl's conditional routing edges.
 
-    Default routes: OWL_TOOLS, HAWK_PICKER, MEERKAT_SCANNER, END
+    Default routes: OWL_TOOLS, HAWK_PICKER, END
     Pass owl_routes to override which destinations are available.
     """
     if owl_routes is None:
         owl_routes = {
             NodeNames.OWL_TOOLS.value: NodeNames.OWL_TOOLS.value,
             NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
-            NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
             END: END,
         }
     workflow.add_conditional_edges(
@@ -101,7 +118,6 @@ def add_owl_tools_conditional_edges(workflow, routing_func, owl_tool_routes=None
         owl_tool_routes = {
             NodeNames.OWL_DIRECTOR.value: NodeNames.OWL_DIRECTOR.value,
             NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
-            NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
         }
     workflow.add_conditional_edges(
         NodeNames.OWL_TOOLS.value,
@@ -132,27 +148,29 @@ def add_hawk_tools_conditional_edges(workflow):
         {
             NodeNames.MEERKAT_SCANNER.value: NodeNames.MEERKAT_SCANNER.value,
             NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
+            NodeNames.CALCULATE_TEAM.value: NodeNames.CALCULATE_TEAM.value,
         },
     )
     return workflow
 
 
-def add_meerkat_conditional_edges(workflow, meerkat_routes=None):
-    """Add Meerkat Scanner conditional routing edges."""
-    if meerkat_routes is None:
-        meerkat_routes = {
-            NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
-            NodeNames.MEERKAT_TOOLS.value: NodeNames.MEERKAT_TOOLS.value,
-        }
-    workflow.add_conditional_edges(
-        NodeNames.MEERKAT_SCANNER.value,
-        route_after_meerkat,
-        meerkat_routes,
-    )
+def add_meerkat_to_hawk(workflow):
+    """Connect Meerkat Scanner directly to Hawk Picker (hardcoded edge).
+
+    Meerkat은 항상 차트 분석 후 Hawk Picker로 복귀한다.
+    route_after_meerkat 함수를 따로 두지 않고 그래프 레벨에서 직접 연결한다.
+    """
+    workflow.add_edge(NodeNames.MEERKAT_SCANNER.value, NodeNames.HAWK_PICKER.value)
     return workflow
 
 
-def add_meerkat_tools_to_end(workflow):
-    """Connect Meerkat Tools to END."""
-    workflow.add_edge(NodeNames.MEERKAT_TOOLS.value, END)
+def add_calculate_team_to_tools(workflow):
+    """Connect Calculate Team to its tool execution node (save targets to DB)."""
+    workflow.add_edge(NodeNames.CALCULATE_TEAM.value, NodeNames.CALCULATE_TEAM_TOOLS.value)
+    return workflow
+
+
+def add_calculate_team_tools_to_end(workflow):
+    """Connect Calculate Team Tools to END."""
+    workflow.add_edge(NodeNames.CALCULATE_TEAM_TOOLS.value, END)
     return workflow

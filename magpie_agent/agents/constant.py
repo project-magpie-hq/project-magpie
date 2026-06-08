@@ -7,4 +7,6 @@ class NodeNames(StrEnum):
     HAWK_PICKER = "hawk_picker"
     HAWK_TOOLS = "hawk_tools"
     MEERKAT_SCANNER = "meerkat_scanner"
-    MEERKAT_TOOLS = "meerkat_tools"
+    # Calculate Team (Bull/Bear/Dolphin 토론 서브그래프)
+    CALCULATE_TEAM = "calculate_team"
+    CALCULATE_TEAM_TOOLS = "calculate_team_tools"
