@@ -54,12 +54,10 @@ def build_calculate_team_subgraph() -> CompiledStateGraph:
         workflow.add_node("bear_rebuttal", bear_rebuttal_node)
         workflow.add_node("dolphin_judge", dolphin_judge_node)
 
-        # === Wave 0: prepare → Bull + Bear (병렬) ===
+        # === Wave 1: prepare → Bull + Bear (병렬) ===
         workflow.add_edge("__start__", "prepare")
         workflow.add_edge("prepare", "bull_first")
         workflow.add_edge("prepare", "bear_first")
-
-        # === Bull + Bear 병렬 초기 분석 ===
 
         # === Wave 2: Bull/Bear 상호 반박 (병렬) ===
         # Bear가 Bull의 분석을 반박
