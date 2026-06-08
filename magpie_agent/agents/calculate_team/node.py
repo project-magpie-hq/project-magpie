@@ -18,6 +18,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from magpie_agent.agents.calculate_team.schema import CalculateTeamState
 from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.tools.monitor_target import register_monitoring_targets_to_nest
+from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,24 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         logger.exception("Dolphin LLM 호출 실패")
         raise RuntimeError("Dolphin 에이전트 실행 중 오류가 발생했습니다.") from e
 
-    print("   🐬 [Dolphin]: 최종 타점 계산을 완료하고 도구 호출을 준비합니다.")
+    # Bull/Bear 토론 요약 + Dolphin 판단 근거를 로깅 및 Telegram 전송
+    bull_view = (state.get("bull_analysis") or "")[:200]
+    bear_view = (state.get("bear_analysis") or "")[:200]
+    dolphin_reasoning = (response.content or "")[:800]
+
+    print(f"   🐬 [Dolphin]: 최종 타점 계산 완료 — 총 {len(response.tool_calls or [])}개 도구 호출")
+    if dolphin_reasoning:
+        print(f"      📝 판단 근거:\n{dolphin_reasoning}")
+
+    if dolphin_reasoning:
+        tg_summary = (
+            f"🐬 [Dolphin 판결]\n\n"
+            f"📈 Bull 관점\n{bull_view}{'...' if len((state.get('bull_analysis') or '')) > 200 else ''}\n\n"
+            f"📉 Bear 관점\n{bear_view}{'...' if len((state.get('bear_analysis') or '')) > 200 else ''}\n\n"
+            f"⚖️ Dolphin 판단\n{dolphin_reasoning}{'...' if len((response.content or '')) > 800 else ''}"
+        )
+        await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
+
     return {"messages": [response]}
 
 
