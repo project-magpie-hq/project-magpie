@@ -659,7 +659,7 @@
         </div>
         <div class="metric">
           <small>Agent Chain</small>
-          <strong>Owl → Hawk → Meerkat</strong>
+          <strong>Owl → Hawk → Meerkat → Calculate Team</strong>
           Daemon은 직접 체결하고 EXPIRED 타점 재계산 시에만 refresh 그래프를 호출
         </div>
       </div>
@@ -773,9 +773,9 @@
                     <g id="node-user-meerkat" class="node">
                       <rect x="840" y="535" rx="20" ry="20" width="360" height="120"></rect>
                       <text x="1020" y="578" text-anchor="middle">Meerkat Scanner</text>
-                      <text x="1020" y="603" class="small" text-anchor="middle">chart_only면 리포트만 생성한 뒤</text>
+                      <text x="1020" y="603" class="small" text-anchor="middle">hawk_candidates가 있으면 리포트를 생성한 뒤</text>
                       <text x="1020" y="622" class="small" text-anchor="middle">Hawk로 복귀</text>
-                      <text x="1020" y="642" class="small" text-anchor="middle">full timing이면 최종 타점 계산 후 tool 강제 호출</text>
+                      <text x="1020" y="642" class="small" text-anchor="middle">hawk 경로가 아니면 차트 분석 후 Calculate Team 호출</text>
                     </g>
 
                     <g id="node-user-meerkattools" class="node store">
@@ -826,13 +826,20 @@
                 </ul>
                 <h3>Hawk Picker</h3>
                 <ul>
-                  <li>Phase 1: 전략을 읽어 후보 코인을 고르고 <code>store_hawk_candidates</code>를 호출하면 <code>meerkat_mode="chart_only"</code>가 설정됩니다.</li>
-                  <li>Phase 2: Meerkat 차트 분석 결과를 바탕으로 <code>update_strategy_target_coins</code>를 호출하고 다시 Meerkat full timing 단계로 넘깁니다.</li>
+                  <li>Phase 1: 전략을 읽어 후보 코인을 고르고 <code>store_hawk_candidates</code>를 호출하면 <code>hawk_candidates</code>가 설정됩니다.</li>
+                  <li>Phase 2: Meerkat 차트 분석 결과를 바탕으로 <code>update_strategy_target_coins</code>를 호출하고 Calculate Team으로 넘깁니다.</li>
                 </ul>
                 <h3>Meerkat Scanner</h3>
                 <ul>
-                  <li><code>chart_only</code>면 DB 쓰기 없이 차트 리포트만 만들고 Hawk에 되돌려 최종 종목을 고르게 합니다.</li>
-                  <li>full timing이면 전략, 현재 지갑, 최근 매매 기록, 기존 타점 정보를 모두 읽고 최종 타점과 <code>buy_allocation_pct</code>를 계산한 뒤 <code>register_monitoring_targets_to_nest</code>를 실행합니다.</li>
+                  <li>Hawk Phase 1이 설정한 <code>hawk_candidates</code>를 기반으로 LLM 차트 분석 리포트를 생성합니다.</li>
+                  <li>리포트는 AIMessage로 Hawk Phase 2에 전달되어 최종 종목 선정에 활용됩니다.</li>
+                  <li>Calculate Team이 사용할 pipeline 데이터(chart_context, strategy, wallet, targets)도 함께 state에 저장합니다.</li>
+                </ul>
+                <h3>Calculate Team (Bull / Bear / Dolphin)</h3>
+                <ul>
+                  <li>Bull(낙관)과 Bear(비관)가 각각 초기 분석 후 상호 반박하는 2-Wave 토론을 진행합니다.</li>
+                  <li>Dolphin Judge가 전체 토론 내용을 검토하고 최종 타점과 <code>buy_allocation_pct</code>를 계산한 뒤 <code>register_monitoring_targets_to_nest</code>를 실행합니다.</li>
+                  <li>Bull/Bear의 토론은 병렬로 실행되며, 모든 그래프(Common/TargetRefresh/SignalTrigger/DailyReport)에서 재사용되는 서브그래프입니다.</li>
                 </ul>
               </div>
             </section>
@@ -1036,7 +1043,7 @@
             <div class="graph-grid">
               <div class="graph-visual">
                 <h3><code>common.py</code> / <code>build_common_graph()</code></h3>
-                <p>사용자 인터랙션 기본 그래프. Owl → Hawk → Meerkat 전체 수직 플로우를 모두 포함합니다.</p>
+                <p>사용자 인터랙션 기본 그래프. Owl → Hawk → Meerkat → Calculate Team 전체 수직 플로우를 모두 포함합니다.</p>
                 <div class="mini-diagram">
                   <svg viewBox="0 0 590 190" aria-label="Common Graph">
                     <defs>
@@ -1097,7 +1104,7 @@
 
               <div class="graph-visual">
                 <h3><code>target_refresh.py</code> / <code>build_target_refresh_graph()</code></h3>
-                <p>SELL 완료 후 EXPIRED 타점을 다시 WAITING_BUY 후보로 재계산할 때 쓰는 Meerkat 중심 그래프입니다.</p>
+                <p>SELL 완료 후 EXPIRED 타점을 다시 WAITING_BUY 후보로 재계산할 때 쓰는 그래프입니다. Meerkat이 차트 분석 후 Calculate Team이 타점을 재계산합니다.</p>
                 <div class="mini-diagram">
                   <svg viewBox="0 0 640 190" aria-label="Target Refresh Graph">
                     <defs>
@@ -1115,7 +1122,7 @@
                     <g class="mini-node">
                       <rect x="176" y="56" rx="16" ry="16" width="104" height="72"></rect>
                       <text x="228" y="87" text-anchor="middle">Meerkat</text>
-                      <text x="228" y="106" class="small" text-anchor="middle">full timing</text>
+                      <text x="228" y="106" class="small" text-anchor="middle">chart analysis</text>
                     </g>
                     <g class="mini-node store">
                       <rect x="380" y="56" rx="16" ry="16" width="108" height="72"></rect>
@@ -1130,7 +1137,7 @@
                 </div>
                 <div class="graph-meta">
                   <div><strong>사용처</strong>: <code>bat_daemon/run.py</code>에서 refresh graph 생성, <code>bat_daemon/integrations/target_refresh.py</code>에서 invoke</div>
-                  <div><strong>특징</strong>: Owl/Hawk 없이 바로 Meerkat로 시작하고 저장 후 종료</div>
+                  <div><strong>특징</strong>: Owl/Hawk 없이 Meerkat → Calculate Team → Meerkat Tools 순서로 실행</div>
                 </div>
               </div>
 
@@ -1165,8 +1172,8 @@
                     </g>
                     <g class="mini-node">
                       <rect x="498" y="92" rx="16" ry="16" width="104" height="72"></rect>
-                      <text x="550" y="123" text-anchor="middle">Meerkat</text>
-                      <text x="550" y="142" class="small" text-anchor="middle">full timing only</text>
+                      <text x="550" y="123" text-anchor="middle">Meerkat → CalcTeam</text>
+                      <text x="550" y="142" class="small" text-anchor="middle">chart + calc team</text>
                     </g>
                     <g class="mini-node store">
                       <rect x="670" y="92" rx="16" ry="16" width="112" height="72"></rect>
@@ -1279,15 +1286,19 @@
               </div>
               <div class="matrix-card">
                 <h3>Hawk Phase 1</h3>
-                <p><code>store_hawk_candidates</code> 호출 후 Meerkat이 차트 분석 전용 단계로 진입합니다.</p>
+                <p><code>store_hawk_candidates</code> 호출 후 <code>hawk_candidates</code>가 설정되고 Meerkat이 차트 분석 단계로 진입합니다.</p>
               </div>
               <div class="matrix-card">
-                <h3>Meerkat chart_only</h3>
-                <p><code>meerkat_mode == "chart_only"</code>이면 리포트만 만들고 Hawk로 복귀합니다.</p>
+                <h3>Meerkat Scanner</h3>
+                <p>Hawk가 설정한 <code>hawk_candidates</code>의 차트를 LLM 분석하여 AIMessage 리포트를 생성하고 Hawk로 복귀합니다. pipeline 데이터도 state에 저장합니다.</p>
               </div>
               <div class="matrix-card">
-                <h3>Meerkat full timing</h3>
-                <p>전략, 지갑, 최근 매매 기록, 기존 타점을 반영해 최종 타점과 매수 비율을 계산하고 DB에 저장합니다.</p>
+                <h3>Hawk Phase 2 → Calculate Team</h3>
+                <p>Meerkat의 차트 분석 리포트를 기반으로 <code>update_strategy_target_coins</code>를 호출한 후, Meerkat을 다시 거치지 않고 Calculate Team을 직접 호출해 타점을 계산합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Meerkat → Calculate Team</h3>
+                <p>Meerkat이 차트 분석 후 Calculate Team(Bull/Bear/Dolphin 토론)이 전략, 지갑, 최근 매매 기록, 기존 타점을 반영해 최종 타점과 매수 비율을 계산하고 DB에 저장합니다.</p>
               </div>
               <div class="matrix-card">
                 <h3>BatDaemon HOLDING</h3>
@@ -1303,7 +1314,7 @@
               </div>
               <div class="matrix-card">
                 <h3>Expired Refresh Graph</h3>
-                <p><code>EXPIRED</code> 타점이 발견되면 Meerkat이 새 타점을 계산해 다시 <code>WAITING_BUY</code>로 갱신합니다.</p>
+                <p><code>EXPIRED</code> 타점이 발견되면 Meerkat 차트 분석 → Calculate Team이 새 타점을 계산해 다시 <code>WAITING_BUY</code>로 갱신합니다.</p>
               </div>
             </div>
           </div>
@@ -1327,7 +1338,8 @@
           <div class="note">
             <h3>추가 설명이 필요한 부분</h3>
             <ul>
-              <li>Meerkat의 <code>chart_only</code> 단계는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
+               <li>Meerkat은 이제 차트 분석 전용이며, 타점 계산은 Calculate Team(Bull/Bear/Dolphin)이 담당합니다.</li>
+               <li>Meerkat의 <code>hawk_candidates</code> 기반 Hawk 복귀 경로는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
               <li>BatDaemon이 발생시키는 BUY/SELL은 이제 실제 체결로 바로 이어집니다. Owl은 이 경로의 체결 검증에 더 이상 개입하지 않습니다.</li>
               <li><code>monitoring_targets.status</code>는 현재 코드 기준으로 <code>WAITING_BUY → HOLDING → EXPIRED → WAITING_BUY</code> 루프를 따릅니다.</li>
               <li><code>bat_daemon/backtest.py</code>와 dashboard의 Backtest 뷰도 이 직접 체결 로직을 backtest_id 전용 DB 문서 기준으로 최대한 동일하게 재생합니다.</li>
