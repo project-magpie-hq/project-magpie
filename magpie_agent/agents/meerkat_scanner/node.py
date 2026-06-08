@@ -2,175 +2,108 @@ import logging
 from typing import Any
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.meerkat_scanner.chart_compressor import generate_chart_context
-from magpie_agent.agents.owl_director.schema import StrategySchema
 from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.state.magpie import MagpieState
-from magpie_agent.tools.monitor_target import (
-    fetch_monitoring_targets_by_user,
-    register_monitoring_targets_to_nest,
-)
+from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
 from magpie_agent.tools.strategy import fetch_strategy_by_user
-from magpie_agent.tools.wallet import fetch_wallet_by_user
 
 logger = logging.getLogger(__name__)
 
 
 async def meerkat_node(state: MagpieState) -> dict[str, Any]:
-    """차트 데이터를 분석하여 구체적인 타점을 계산하거나, 차트 분석 전용 리포트를 생성하는 노드"""
+    """차트 데이터를 분석하여 LLM 기반 차트 분석 리포트를 생성하는 노드.
 
-    meerkat_mode = state.get("meerkat_mode")
-    is_chart_only = meerkat_mode == "chart_only"
+    항상 Hawk Picker로부터 호출되며, AIMessage 리포트를 반환한 후 Hawk Picker로 복귀한다.
+    Hawk Phase 2가 이 리포트를 읽고 최종 종목을 선정한 뒤 Calculate Team으로 넘긴다.
+    """
+    print("\n🦦 [Meerkat]: 차트 분석을 실행합니다...")
 
-    backtest_time: str | None = state.get("backtest_time")  # 라이브면 None, 백테스트면 과거 시간
+    target_coins: list[str] = state.get("hawk_candidates") or []
+    backtest_time: str | None = state.get("backtest_time")
 
-    if is_chart_only:
-        print("\n🦦 [Meerkat]: 차트 분석 전용 모드로 실행합니다...")
-
-        target_coins: list[str] = state.get("hawk_candidates") or []
-
-        if not target_coins:
-            print("   ⚠️ [Meerkat]: State에 후보 코인 정보가 없어 분석을 중단합니다.")
-            return {"messages": []}
-
-        try:
-            chart_context = await generate_chart_context(target_coins, backtest_time)
-        except Exception as e:
-            logger.exception("차트 컨텍스트 생성 실패: %s", target_coins)
-            raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
-
-        print("   ✅ [Meerkat]: 차트 분석 리포트를 생성했습니다.")
-        return {"messages": [AIMessage(content=chart_context)]}
-
-    print("\n🦦 [Meerkat]: 차트 데이터를 분석하여 구체적인 타점을 계산합니다...")
-
-    current_strategy = await fetch_strategy_by_user(state["user_id"])
-    if current_strategy is None:
-        print("   ⚠️ [Meerkat]: 전략 정보가 없어 계산을 중단합니다.")
-        # transfer_to_agent 호출에 대한 ToolMessage를 합성해야 meerkat_tools가 해당 tool_call을 실행하지 않음
-        for msg in reversed(state.get("messages", [])):
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    if tc["name"] == "transfer_to_agent":
-                        return {
-                            "messages": [
-                                ToolMessage(content="전략 정보가 없어 분석을 중단합니다.", tool_call_id=tc["id"])
-                            ]
-                        }
-                break
+    if not target_coins:
+        print("   ⚠️ [Meerkat]: hawk_candidates가 없어 분석을 중단합니다.")
         return {"messages": []}
 
-    strategy = StrategySchema.model_validate(current_strategy)
+    # ==============================
+    # 1. 전략 정보 (LLM 분석 컨텍스트용)
+    # ==============================
+    current_strategy = await fetch_strategy_by_user(state["user_id"])
+    strategy_details = (
+        str(current_strategy.get("strategy_details", {}))
+        if current_strategy
+        else "(정보 없음)"
+    )
 
+    # ==============================
+    # 2. 차트 raw 데이터 수집
+    # ==============================
     try:
-        chart_context = await generate_chart_context(strategy.target_coins, backtest_time)
+        raw_chart_data = await generate_chart_context(target_coins, backtest_time)
     except Exception as e:
-        logger.exception("차트 컨텍스트 생성 실패: %s", strategy.target_coins)
+        logger.exception("차트 컨텍스트 생성 실패: %s", target_coins)
         raise RuntimeError("차트 데이터 분석 중 오류가 발생했습니다.") from e
 
-    system_prompt = load_prompt()
-
-    # Owl의 마지막 메시지(분석 결과 및 지시사항)를 피드백으로 사용
-    messages = state.get("messages", [])
-    feedback_data = messages[-1].content if messages else "이전 피드백 없음"
-
-    user_input = f"""
-        [Owl의 지시사항 (투자 전략)]
-        {strategy.strategy_details}
-
-        [실시간 차트 컨텍스트 (장/단기 요약)]
-        {chart_context}
-
-        [직전 타점 피드백 (Self-Correction 용도)]
-        {feedback_data}
-    """
-
-    # 1. 현재 자산 정보 추가
-    current_wallet = await fetch_wallet_by_user(state["user_id"])
-    if current_wallet:
-        user_input += f"""
-            [현재 자산]
-            {current_wallet.model_dump_json(indent=2)}
-        """
-
-    recent_trades = list(reversed(current_wallet.trade_history[-12:])) if current_wallet else []
-    if recent_trades:
-        trade_summaries = [
-            {
-                "market": trade.market,
-                "signal": trade.signal.value if hasattr(trade.signal, "value") else trade.signal,
-                "price": trade.price,
-                "volume": trade.volume,
-                "total_price": trade.total_price,
-                "executed_at": trade.executed_at.isoformat(),
-            }
-            for trade in recent_trades
-        ]
-        user_input += f"""
-            [최근 매매 기록]
-            {trade_summaries}
-        """
-
-    # 2. 현재 등록된 타점 정보 추가
+    # ==============================
+    # 3. 기존 타점 조회 (LLM 분석 컨텍스트용)
+    # ==============================
+    existing_targets_str = "(없음)"
     existing_targets = await fetch_monitoring_targets_by_user(state["user_id"])
     if existing_targets:
         clean_targets = []
         for t in existing_targets:
             clean_targets.append(
                 {
-                    "target_coin": t.get("target_coin"),
-                    "status": t.get("status"),
-                    "buy_price_upper_limit": t.get("buy_price_upper_limit"),
-                    "buy_price_lower_limit": t.get("buy_price_lower_limit"),
-                    "take_profit_price": t.get("take_profit_price"),
-                    "stop_loss_price": t.get("stop_loss_price"),
-                    "buy_allocation_pct": t.get("buy_allocation_pct"),
+                    k: t.get(k)
+                    for k in (
+                        "target_coin",
+                        "status",
+                        "buy_price_upper_limit",
+                        "buy_price_lower_limit",
+                        "take_profit_price",
+                        "stop_loss_price",
+                        "buy_allocation_pct",
+                    )
                 }
             )
+        existing_targets_str = str(clean_targets)
 
-        user_input += f"""
-            [현재 등록된 타점 정보]
-            {clean_targets}
-        """
+    # ==============================
+    # 4. LLM 차트 분석 (strategy + existing targets를 컨텍스트로)
+    # ==============================
+    system_prompt = load_prompt()
 
-    llm_messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
+    user_input = f"""
+    [분석 대상 코인]
+    {target_coins}
 
-    try:
-        agent = get_meerkat_llm()
-        response: AIMessage = normalize_content(await agent.ainvoke(llm_messages))
-    except Exception as e:
-        logger.exception("Meerkat LLM 호출 실패")
-        raise RuntimeError("Meerkat 에이전트 실행 중 오류가 발생했습니다.") from e
+    [차트 기술 데이터]
+    {raw_chart_data}
 
-    print("   ✅ [Meerkat]: 타점 계산을 완료하고 도구 호출을 준비합니다.")
+    [투자 전략]
+    {strategy_details}
 
-    return {
-        "messages": [response],
-    }
+    [현재 등록된 타점 정보]
+    {existing_targets_str}
+    """
 
-
-def get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
-    """Meerkat 에이전트 모델 초기화"""
-    try:
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-        return llm.bind_tools(
-            [register_monitoring_targets_to_nest],
-            tool_choice="register_monitoring_targets_to_nest",
+    llm = _get_meerkat_llm()
+    response: AIMessage = normalize_content(
+        await llm.ainvoke(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
         )
-    except Exception as e:
-        logger.exception("Meerkat LLM 초기화 실패")
-        raise RuntimeError("Meerkat LLM 초기화 실패") from e
+    )
+
+    print("   ✅ [Meerkat]: 차트 분석 리포트를 생성했습니다. (경로: → Hawk Picker)")
+
+    return {"messages": [response]}
 
 
-def route_after_meerkat(state: MagpieState) -> str:
-    """Meerkat 실행 후 라우팅: 차트 분석 전용 모드면 hawk_picker로, 아니면 meerkat_tools로"""
-    meerkat_mode = state.get("meerkat_mode")
-    if meerkat_mode == "chart_only":
-        print("   🦦 [Meerkat]: 차트 분석 완료 → Hawk Picker의 최종 선정으로 이동")
-        return NodeNames.HAWK_PICKER.value
-    return NodeNames.MEERKAT_TOOLS.value
+def _get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
+    """Meerkat 차트 분석용 LLM (분석 텍스트 생성, 도구 미바인드)"""
+    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
