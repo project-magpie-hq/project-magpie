@@ -189,7 +189,7 @@ async def collect_live_daemon_sample(user_id: str, max_ticks: int, timeout_secon
             if not coin:
                 continue
 
-            target_before = bat.active_targets.get(coin).model_copy(deep=True) if coin in bat.active_targets else None
+            target_before = bat.active_targets[coin].model_copy(deep=True) if coin in bat.active_targets else None
             signal_count_before = len(bat.signal_history)
             await bat.process_candle_tick(coin, tick)
             target_after = bat.active_targets.get(coin)
@@ -248,7 +248,7 @@ async def collect_backtest_daemon_sample(
             for _, trade_price in _candle_path(candle):
                 tick = _to_upbit_tick(coin, candle_time, candle, trade_price)
                 target_before = (
-                    bat.active_targets.get(coin).model_copy(deep=True) if coin in bat.active_targets else None
+                    bat.active_targets[coin].model_copy(deep=True) if coin in bat.active_targets else None
                 )
                 signal_count_before = len(bat.signal_history)
                 await bat.process_candle_tick(coin, tick)
@@ -306,7 +306,11 @@ def render_signal_table(signals: list[dict[str, Any]], targets: dict[str, Target
         st.caption("아직 조건을 만족한 BUY/SELL 신호가 없습니다.")
         return
 
-    rows = [signal_context_row(signal, targets.get(signal.get("target_coin"))) for signal in signals]
+    rows = [
+        signal_context_row(signal, targets.get(str(target_coin_key)))
+        for signal in signals
+        if (target_coin_key := signal.get("target_coin")) is not None
+    ]
     st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
@@ -415,11 +419,11 @@ def render_wallet_control_panel(namespace: str) -> None:
                 st.session_state.bat_backtest_result = None
 
     try:
-        wallet = run_async_task(fetch_wallet_by_user(effective_wallet_user_id))
+        fetched_wallet = run_async_task(fetch_wallet_by_user(effective_wallet_user_id))
     except Exception as exc:
         st.exception(exc)
     else:
-        render_wallet_snapshot(wallet, "DB wallets 현재 값")
+        render_wallet_snapshot(fetched_wallet, "DB wallets 현재 값")
 
 
 def render_live_daemon_panel(namespace: str = "bat_daemon") -> None:

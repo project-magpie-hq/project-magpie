@@ -12,7 +12,7 @@ from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.router import transfer_to_agent
 from magpie_agent.tools.strategy import get_my_active_strategy, register_strategy_to_nest
-from magpie_agent.tools.wallet import get_wallet, process_trade_execution
+from magpie_agent.tools.wallet import get_wallet
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,6 @@ def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
             get_my_active_strategy,
             transfer_to_agent,
             get_wallet,
-            process_trade_execution,
         ]
         return llm.bind_tools(tools)
     except Exception as e:

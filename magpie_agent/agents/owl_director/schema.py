@@ -31,7 +31,6 @@ class StrategySchema(BaseModel):
 
 
 class AgentEnum(StrEnum):
-    MEERKAT = "meerkat_scanner"
     HAWK = "hawk_picker"
     END = END
 

@@ -61,14 +61,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not getattr(ai_msg, "tool_calls", None) and ai_msg.content:
                         await update.message.reply_text(f"🦉 [Owl]: {ai_msg.content}")
 
-            # 호크의 종목 선정 메시지 (tool_call 유무와 관계없이 rationale 전송)
-            if "hawk_picker" in event:
-                node_output = event["hawk_picker"]
-                if "messages" in node_output:
-                    ai_msg = node_output["messages"][0]
-                    if ai_msg.content:
-                        await update.message.reply_text(f"🦅 [Hawk]: {ai_msg.content}")
-
             # 미어캣의 활동 표시 (모드별 메시지 차별화)
             if "meerkat_scanner" in event:
                 node_output = event["meerkat_scanner"]
@@ -77,8 +69,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # 차트 분석 전용 모드: content만 있고 tool_calls 없음
                     if ai_msg.content and not getattr(ai_msg, "tool_calls", None):
                         await update.message.reply_text("🦦 [Meerkat]: 차트 분석 리포트를 생성했습니다.")
+                    elif "chart_context" in node_output:
+                        await update.message.reply_text("🦦 [Meerkat]: 차트 분석 완료, Calculate Team에 전달했습니다.")
                     else:
                         await update.message.reply_text("🦦 [Meerkat]: 타점 분석을 마치고 결과를 기록했습니다.")
+
+            # Calculate Team (Bull/Bear/Dolphin) 활동 표시
+            if "calculate_team" in event:
+                await update.message.reply_text("🐂🐻🐬 [Calculate Team]: Bull/Bear 토론 및 Dolphin 최종 타점 계산을 완료했습니다.")
 
     except Exception as e:
         logger.exception("메시지 처리 중 오류 발생")

@@ -36,6 +36,9 @@ def build_session_stats_from_signal_history(signal_history: list[dict]) -> Trade
         if volume in (None, "", "-") or price is None or signal.get("execution_error"):
             continue
 
+        assert isinstance(signal_type, str), f"signal_type must be str, got {type(signal_type)}"
+        assert isinstance(volume, str), f"volume must be str, got {type(volume)}"
+
         trades.append(
             TradeHistoryEntry(
                 market=signal["target_coin"],

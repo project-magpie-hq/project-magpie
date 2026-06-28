@@ -12,7 +12,7 @@ NODE_OWL_TOOLS = "owl_tools"
 NODE_HAWK_PICKER = "hawk_picker"
 NODE_HAWK_TOOLS = "hawk_tools"
 NODE_MEERKAT_SCANNER = "meerkat_scanner"
-NODE_MEERKAT_TOOLS = "meerkat_tools"
+NODE_CALCULATE_TEAM_TOOLS = "calculate_team_tools"
 
 NODE_META: dict[str, tuple[str, str, str]] = {
     NODE_OWL_DIRECTOR: ("🦉", "Owl Director", "사용자 의도 분석 및 전략 수립"),
@@ -20,7 +20,7 @@ NODE_META: dict[str, tuple[str, str, str]] = {
     NODE_HAWK_PICKER: ("🦅", "Hawk Picker", "전략 기반 종목 선정 (Phase 1: 후보 / Phase 2: 최종 선정)"),
     NODE_HAWK_TOOLS: ("🔧", "Hawk Tools", "Hawk이 선정한 코인 등록/전략 업데이트"),
     NODE_MEERKAT_SCANNER: ("🦦", "Meerkat Scanner", "차트 데이터 분석 및 타점 계산"),
-    NODE_MEERKAT_TOOLS: ("⚙️", "Meerkat Tools", "Meerkat이 계산한 타점 등록"),
+    NODE_CALCULATE_TEAM_TOOLS: ("⚙️", "Calculate Team Tools", "Calculate Team이 생성한 타점 등록"),
 }
 
 MONGO_TOOL_META: dict[str, dict[str, str]] = {

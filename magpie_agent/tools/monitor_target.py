@@ -20,6 +20,7 @@ async def register_monitoring_targets_to_nest(
 
     user_id: str = state["user_id"]
 
+    target_details = []
     for target in targets:
         target_entity = TargetEntity.model_validate({"user_id": user_id, **target.model_dump()})
         filter_query = {
@@ -49,6 +50,23 @@ async def register_monitoring_targets_to_nest(
             print(f"🪹 [The Nest]: 새로운 타점이 DB에 등록되었습니다! ID: {result.upserted_id}")
         else:
             print("🪹 [The Nest]: 기존 타점이 성공적으로 업데이트되었습니다!")
+
+        # 상세 로깅
+        coin = target_entity.target_coin
+        target_details.append(
+            f"• {coin}: 매수 {target_entity.buy_price_lower_limit:,.0f}~{target_entity.buy_price_upper_limit:,.0f}원 "
+            f"| 익절 {target_entity.take_profit_price:,.0f}원 "
+            f"| 손절 {target_entity.stop_loss_price:,.0f}원 "
+            f"| 할당 {target_entity.buy_allocation_pct*100:.0f}%"
+            f"({target_entity.trigger_basis.value})"
+        )
+        print(f"   📊 [{coin}] 타점 상세: "
+              f"매수구간 {target_entity.buy_price_lower_limit:,.0f}~{target_entity.buy_price_upper_limit:,.0f} | "
+              f"익절 {target_entity.take_profit_price:,.0f} | "
+              f"손절 {target_entity.stop_loss_price:,.0f} | "
+              f"할당 {target_entity.buy_allocation_pct*100:.0f}% | "
+              f"기준 {target_entity.trigger_basis.value}")
+        print(f"   📝 [{coin}] 근거: {target_entity.reason}")
         print("-" * 50)
         print("⚙️ " * 15 + "\n")
 

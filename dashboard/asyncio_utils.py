@@ -1,7 +1,6 @@
-from collections.abc import Awaitable
-
 import asyncio
+from collections.abc import Coroutine
 
 
-def run_async_task[T](awaitable: Awaitable[T]) -> T:
-    return asyncio.run(awaitable)
+def run_async_task[T](coro: Coroutine[None, None, T]) -> T:
+    return asyncio.run(coro)

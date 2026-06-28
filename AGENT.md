@@ -9,14 +9,15 @@
   - `common.py`: 사용자 기본 그래프
   - `target_refresh.py`: EXPIRED 타점 refresh 그래프
   - `signal_trigger.py`, `daily_report.py`: 현재는 직접 엔트리포인트 연결이 없는 준비된 분리 그래프
-  - `shared.py`: Owl/Hawk/Meerkat 노드 및 edge 조립 헬퍼
+  - `shared.py`: Owl/Hawk/Meerkat/Calculate Team 노드 및 edge 조립 헬퍼
 - `bat_daemon/`는 `monitoring_targets`를 기준으로 업비트 시장 데이터를 감시하고 시그널을 발생시킵니다.
 - `db/`는 `strategies`, `monitoring_targets`, `wallets`를 관리합니다.
 - `docs/project_magpie_manual.html`은 현재 코드 기준 실행 플로우 설명서입니다.
 - `monitoring_targets`에는 가격 조건뿐 아니라 `buy_allocation_pct` 같은 포지션 비율 정보도 포함됩니다.
+- Calculate Team (Bull/Bear/Dolphin)이 Meerkat의 차트 분석 결과를 입력받아 토론을 통해 타점을 최종 결정합니다.
 - `wallets`에는 현재 자산 외에 `trade_history`가 저장되어 Meerkat이 다음 타점 계산 시 과거 체결 맥락을 함께 참고합니다.
 - dashboard의 Backtest와 `bat_daemon/backtest.py`는 원본 전략 `user_id`를 읽어 백테스트 전용 `backtest_id`의 전략/지갑/타점을 새로 생성한 뒤 재생합니다.
-- 현재 Meerkat full timing은 다시 전략의 `target_coins` 전체를 한 번에 읽어 타점을 계산하는 구조입니다.
+- Calculate Team은 bull_first + bear_first (병렬) → bull_rebuttal + bear_rebuttal (병렬) → dolphin_judge 3-Wave 토론 구조입니다.
 - dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받습니다.
 
 ## 핵심 실행 흐름
@@ -24,7 +25,8 @@
 - 사용자 진입점: `magpie_agent/run.py`
   - Owl Director가 사용자 요청을 분석합니다.
   - 필요 시 Hawk Picker가 종목을 선정합니다.
-  - Meerkat Scanner가 최종 타점을 계산하고 `monitoring_targets`를 저장합니다.
+  - Meerkat Scanner가 차트 분석을 수행합니다.
+- Calculate Team (Bull/Bear/Dolphin)이 토론을 통해 최종 타점을 계산하고 `monitoring_targets`를 저장합니다.
 - Daemon 진입점: `bat_daemon/run.py`
   - `monitoring_targets`를 주기적으로 동기화합니다.
   - 실시간 가격/마감 캔들 조건을 검사합니다.

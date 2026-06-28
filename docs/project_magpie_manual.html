@@ -659,8 +659,8 @@
         </div>
         <div class="metric">
           <small>Agent Chain</small>
-          <strong>Owl → Hawk → Meerkat</strong>
-          Daemon은 직접 체결하고 EXPIRED 타점 재계산 시에만 refresh 그래프를 호출
+          <strong>Owl → Hawk(Phase 1) → Meerkat → Hawk(Phase 2) → Calculate Team</strong>
+          Daemon은 직접 체결하고 EXPIRED 타점 재계산 시에만 Target Refresh 그래프를 호출
         </div>
       </div>
     </section>
@@ -704,7 +704,7 @@
                   <span class="badge ok">사용자 주도</span>
                 </div>
                 <div class="diagram">
-                  <svg viewBox="0 0 1240 760" aria-label="Magpie Agent Flow">
+                  <svg viewBox="0 0 1240 850" aria-label="Magpie Agent Flow">
                     <defs>
                       <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
@@ -721,10 +721,10 @@
                     <path id="edge-user-8" class="edge" d="M1020 440 C1020 500, 1020 500, 1020 545"></path>
                     <path id="edge-user-9" class="edge dashed" d="M990 216 C930 216, 930 248, 700 320"></path>
                     <path id="edge-user-10" class="edge dashed" d="M990 216 C930 216, 930 330, 700 430"></path>
-                    <path id="edge-user-11" class="edge dashed" d="M860 600 C780 600, 780 600, 700 600"></path>
-                    <path id="edge-user-12" class="edge dashed" d="M1020 595 C1020 655, 1020 655, 1020 690"></path>
+                    <path id="edge-user-11" class="edge" d="M1020 655 C1020 680, 1020 680, 1020 700"></path>
+                    <path id="edge-user-12" class="edge" d="M1020 780 C1020 800, 1020 800, 1020 815"></path>
                     <path id="edge-user-13" class="edge dashed" d="M1100 440 C1135 440, 1135 320, 700 320"></path>
-                    <path id="edge-user-14" class="edge" d="M940 703 C880 703, 880 703, 700 703"></path>
+                    <path id="edge-user-14" class="edge" d="M940 836 C880 836, 880 703, 700 603"></path>
 
                     <g id="node-user-start" class="node">
                       <rect x="30" y="60" rx="20" ry="20" width="110" height="100"></rect>
@@ -755,7 +755,7 @@
                     <g id="node-user-owltools" class="node">
                       <rect x="930" y="124" rx="20" ry="20" width="160" height="92"></rect>
                       <text x="1010" y="164" text-anchor="middle">Owl Tools</text>
-                      <text x="1010" y="187" class="small" text-anchor="middle">strategy / wallet / trade</text>
+                      <text x="1010" y="187" class="small" text-anchor="middle">strategy / wallet 조회</text>
                     </g>
 
                     <g id="node-user-hawk" class="node">
@@ -773,14 +773,18 @@
                     <g id="node-user-meerkat" class="node">
                       <rect x="840" y="535" rx="20" ry="20" width="360" height="120"></rect>
                       <text x="1020" y="578" text-anchor="middle">Meerkat Scanner</text>
-                      <text x="1020" y="603" class="small" text-anchor="middle">chart_only면 리포트만 생성한 뒤</text>
-                      <text x="1020" y="622" class="small" text-anchor="middle">Hawk로 복귀</text>
-                      <text x="1020" y="642" class="small" text-anchor="middle">full timing이면 최종 타점 계산 후 tool 강제 호출</text>
+                      <text x="1020" y="603" class="small" text-anchor="middle">차트 분석 → Hawk Phase 2</text>
+                    </g>
+
+                    <g id="node-user-calculate" class="node">
+                      <rect x="920" y="700" rx="20" ry="20" width="200" height="80"></rect>
+                      <text x="1020" y="738" text-anchor="middle">Calculate Team</text>
+                      <text x="1020" y="758" class="small" text-anchor="middle">Bull/Bear 토론 → Dolphin 판결</text>
                     </g>
 
                     <g id="node-user-meerkattools" class="node store">
-                      <rect x="930" y="690" rx="20" ry="20" width="180" height="42"></rect>
-                      <text x="1020" y="716" class="small" text-anchor="middle">monitoring_targets 저장</text>
+                      <rect x="920" y="815" rx="20" ry="20" width="200" height="42"></rect>
+                      <text x="1020" y="841" class="small" text-anchor="middle">monitoring_targets 저장</text>
                     </g>
 
                     <g id="node-db-strategy" class="node store">
@@ -800,7 +804,7 @@
                     <g id="node-db-targets" class="node store">
                       <rect x="500" y="552" rx="20" ry="20" width="200" height="102"></rect>
                       <text x="600" y="595" text-anchor="middle">DB: monitoring_targets</text>
-                      <text x="600" y="618" class="small" text-anchor="middle">Meerkat 최종 타점 저장</text>
+                      <text x="600" y="618" class="small" text-anchor="middle">Calculate Team 최종 타점 저장</text>
                       <text x="600" y="638" class="small" text-anchor="middle">BatDaemon이 이후 감시</text>
                     </g>
                   </svg>
@@ -820,19 +824,27 @@
                 <h3>Owl Director</h3>
                 <ul>
                   <li>도구 호출이 없으면 바로 종료하고 텔레그램으로 일반 답변을 보냅니다.</li>
-                  <li><code>transfer_to_agent(hawk_picker)</code>이면 Hawk로 넘어갑니다.</li>
-                  <li><code>transfer_to_agent(meerkat_scanner)</code>이면 Meerkat로 바로 넘어갑니다.</li>
-                  <li>그 외 <code>register_strategy_to_nest</code>, <code>get_my_active_strategy</code>, <code>get_wallet</code>, <code>process_trade_execution</code>는 Owl Tools에서 실행되고, 완료 후 다시 Owl로 돌아갑니다.</li>
+                  <li><code>transfer_to_agent(hawk_picker)</code>이면 Hawk Picker로 넘어갑니다. Owl은 더 이상 Meerkat을 직접 호출하지 않습니다.</li>
+                  <li><code>register_strategy_to_nest</code>, <code>get_my_active_strategy</code>, <code>get_wallet</code>는 Owl Tools에서 실행되고, 완료 후 다시 Owl로 돌아갑니다.</li>
+                  <li>매매 실행 도구(<code>process_trade_execution</code>)는 제거되었습니다. 거래는 Bat Daemon이 단독 수행합니다.</li>
                 </ul>
                 <h3>Hawk Picker</h3>
                 <ul>
-                  <li>Phase 1: 전략을 읽어 후보 코인을 고르고 <code>store_hawk_candidates</code>를 호출하면 <code>meerkat_mode="chart_only"</code>가 설정됩니다.</li>
-                  <li>Phase 2: Meerkat 차트 분석 결과를 바탕으로 <code>update_strategy_target_coins</code>를 호출하고 다시 Meerkat full timing 단계로 넘깁니다.</li>
+                  <li>Phase 1: 전략을 읽어 후보 코인을 고르고 <code>store_hawk_candidates</code>를 호출하면 <code>hawk_candidates</code>가 설정됩니다.</li>
+                  <li>Phase 2: Meerkat 차트 분석 결과를 바탕으로 <code>update_strategy_target_coins</code>를 호출하고 Calculate Team으로 넘깁니다.</li>
                 </ul>
-                <h3>Meerkat Scanner</h3>
+                <h3>Meerkat Scanner (차트 분석 전용)</h3>
                 <ul>
-                  <li><code>chart_only</code>면 DB 쓰기 없이 차트 리포트만 만들고 Hawk에 되돌려 최종 종목을 고르게 합니다.</li>
-                  <li>full timing이면 전략, 현재 지갑, 최근 매매 기록, 기존 타점 정보를 모두 읽고 최종 타점과 <code>buy_allocation_pct</code>를 계산한 뒤 <code>register_monitoring_targets_to_nest</code>를 실행합니다.</li>
+                  <li>Hawk Phase 1이 설정한 <code>hawk_candidates</code>를 기반으로 LLM 차트 분석 리포트를 생성합니다.</li>
+                  <li>리포트는 AIMessage로 Hawk Phase 2에 전달되어 최종 종목 선정에 활용됩니다.</li>
+                  <li>분석 완료 후 <strong>하드코딩 엣지</strong>(<code>workflow.add_edge(meerkat, hawk_picker)</code>)로 바로 Hawk Phase 2로 복귀합니다. 별도 라우팅 함수 없이 단순화되었습니다.</li>
+                  <li>Calculate Team이 사용할 pipeline 데이터(chart_context, strategy, wallet, targets)도 함께 state에 저장합니다.</li>
+                </ul>
+                <h3>Calculate Team (Bull / Bear / Dolphin)</h3>
+                <ul>
+                  <li>Bull(낙관)과 Bear(비관)가 각각 초기 분석 후 상호 반박하는 2-Wave 토론을 진행합니다.</li>
+                  <li>Dolphin Judge가 전체 토론 내용을 검토하고 최종 타점과 <code>buy_allocation_pct</code>를 계산한 뒤 <code>register_monitoring_targets_to_nest</code>를 실행합니다.</li>
+                  <li>Bull/Bear의 토론은 병렬로 실행되며, 모든 그래프(Common/TargetRefresh/DailyReport)에서 재사용되는 서브그래프입니다.</li>
                 </ul>
               </div>
             </section>
@@ -980,7 +992,7 @@
                   <li>BUY는 monitoring target의 <code>buy_allocation_pct</code>만큼 현재 원화 잔고를 사용해 체결합니다.</li>
                   <li><code>dry_run</code>이면 BUY는 <code>HOLDING</code>, SELL은 <code>EXPIRED</code>로 메모리상 백테스트 처리만 진행합니다.</li>
                   <li>매수 완료 후 상태는 <code>HOLDING</code>이 되고, 매도 완료 후 상태는 <code>EXPIRED</code>가 됩니다.</li>
-                  <li>DB에 <code>EXPIRED</code> 타점이 보이면 Daemon이 Meerkat refresh 그래프를 호출해 새 <code>WAITING_BUY</code> 타점을 다시 계산합니다.</li>
+                  <li>DB에 <code>EXPIRED</code> 타점이 보이면 Daemon이 Target Refresh 그래프(Meerkat → Calculate Team)를 호출해 새 <code>WAITING_BUY</code> 타점을 다시 계산합니다.</li>
                 </ul>
               </div>
             </section>
@@ -1003,7 +1015,6 @@
             <div class="graph-pills">
               <span class="graph-pill">Common: 사용자 대화 진입점</span>
               <span class="graph-pill">Target Refresh: Daemon 후속 계산</span>
-              <span class="graph-pill">Signal Trigger: 현재 미사용에 가까운 경량 경로</span>
               <span class="graph-pill">Daily Report: 정기 점검 확장용</span>
             </div>
           </div>
@@ -1016,7 +1027,7 @@
             <ul>
               <li><code>shared.py</code>는 그래프 자체가 아니라 노드 추가 함수와 conditional edge 조립 함수 모음입니다. 그래프를 새로 나눌 때 우선 여기 재사용 가능 여부를 봐야 합니다.</li>
               <li>사용자 대화, Daemon refresh, 정기 점검처럼 진입 목적이 다르면 별도 builder로 분리하고, 상태 플래그(<code>from_daemon</code>, <code>is_daily_review</code>)와 포함 노드를 최소화하는 편이 안전합니다.</li>
-              <li>현재 실사용 기준으로는 <code>Common Graph</code>와 <code>Target Refresh Graph</code>가 핵심이고, <code>Signal Trigger</code>와 <code>Daily Report</code>는 준비된 확장 그래프 성격이 더 강합니다.</li>
+              <li>현재 실사용 기준으로는 <code>Common Graph</code>와 <code>Target Refresh Graph</code>가 핵심이고, <code>Daily Report</code>는 준비된 확장 그래프 성격이 더 강합니다.</li>
               <li>Owl 프롬프트 선택은 <code>magpie_agent/agents/owl_director/node.py</code>에서 <code>is_daily_review → from_daemon → user</code> 순서로 갈립니다.</li>
               <li>그래프 분리 작업 시에는 import 위치뿐 아니라 실제 호출 경로가 남아 있는지도 같이 확인해야 문서와 코드가 어긋나지 않습니다.</li>
             </ul>
@@ -1036,9 +1047,9 @@
             <div class="graph-grid">
               <div class="graph-visual">
                 <h3><code>common.py</code> / <code>build_common_graph()</code></h3>
-                <p>사용자 인터랙션 기본 그래프. Owl → Hawk → Meerkat 전체 수직 플로우를 모두 포함합니다.</p>
+                <p>사용자 인터랙션 기본 그래프. Owl → Hawk → Meerkat → Calculate Team 전체 수직 플로우를 모두 포함합니다.</p>
                 <div class="mini-diagram">
-                  <svg viewBox="0 0 590 190" aria-label="Common Graph">
+                  <svg viewBox="0 0 720 190" aria-label="Common Graph">
                     <defs>
                       <marker id="mini-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
@@ -1051,7 +1062,8 @@
                     <path class="mini-edge dashed" d="M342 82 C338 120, 314 132, 270 132"></path>
                     <path class="mini-edge" d="M342 132 C372 132, 372 132, 396 132"></path>
                     <path class="mini-edge dashed" d="M204 148 C238 148, 238 148, 270 148"></path>
-                    <path class="mini-edge" d="M342 148 C370 148, 370 148, 396 148"></path>
+                    <path class="mini-edge" d="M476 132 C512 132, 512 132, 540 132"></path>
+                    <path class="mini-edge" d="M630 132 C660 132, 660 132, 688 132"></path>
 
                     <g class="mini-node signal">
                       <rect x="18" y="34" rx="16" ry="16" width="52" height="48"></rect>
@@ -1080,12 +1092,16 @@
                     <g class="mini-node">
                       <rect x="396" y="102" rx="16" ry="16" width="80" height="60"></rect>
                       <text x="436" y="128" text-anchor="middle">Meerkat</text>
-                      <text x="436" y="145" class="small" text-anchor="middle">chart/full</text>
+                      <text x="436" y="145" class="small" text-anchor="middle">chart</text>
                     </g>
-                    <g class="mini-node store">
-                      <rect x="490" y="102" rx="16" ry="16" width="80" height="60"></rect>
-                      <text x="530" y="128" text-anchor="middle">Meerkat Tools</text>
-                      <text x="530" y="145" class="small" text-anchor="middle">targets</text>
+                    <g class="mini-node">
+                      <rect x="540" y="102" rx="16" ry="16" width="90" height="60"></rect>
+                      <text x="585" y="128" text-anchor="middle">Calculate</text>
+                      <text x="585" y="145" class="small" text-anchor="middle">Team</text>
+                    </g>
+                    <g class="mini-node signal">
+                      <rect x="688" y="108" rx="16" ry="16" width="52" height="48"></rect>
+                      <text x="714" y="137" text-anchor="middle">END</text>
                     </g>
                   </svg>
                 </div>
@@ -1097,87 +1113,46 @@
 
               <div class="graph-visual">
                 <h3><code>target_refresh.py</code> / <code>build_target_refresh_graph()</code></h3>
-                <p>SELL 완료 후 EXPIRED 타점을 다시 WAITING_BUY 후보로 재계산할 때 쓰는 Meerkat 중심 그래프입니다.</p>
+                <p>SELL 완료 후 EXPIRED 타점을 다시 WAITING_BUY 후보로 재계산할 때 쓰는 그래프입니다. Calculate Team이 타점을 재계산합니다.</p>
                 <div class="mini-diagram">
-                  <svg viewBox="0 0 640 190" aria-label="Target Refresh Graph">
+                  <svg viewBox="0 0 760 190" aria-label="Target Refresh Graph">
                     <defs>
                       <marker id="mini-arrow-refresh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
                       </marker>
                     </defs>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M76 92 C126 92, 126 92, 176 92"></path>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M280 92 C330 92, 330 92, 380 92"></path>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M488 92 C526 92, 526 92, 560 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M76 92 C126 92, 126 92, 166 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M260 92 C310 92, 310 92, 350 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M470 92 C510 92, 510 92, 550 92"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-refresh)" d="M660 92 C690 92, 690 92, 720 92"></path>
                     <g class="mini-node signal">
                       <rect x="20" y="62" rx="16" ry="16" width="56" height="60"></rect>
                       <text x="48" y="97" text-anchor="middle">START</text>
                     </g>
                     <g class="mini-node">
-                      <rect x="176" y="56" rx="16" ry="16" width="104" height="72"></rect>
-                      <text x="228" y="87" text-anchor="middle">Meerkat</text>
-                      <text x="228" y="106" class="small" text-anchor="middle">full timing</text>
+                      <rect x="166" y="56" rx="16" ry="16" width="94" height="72"></rect>
+                      <text x="213" y="87" text-anchor="middle">Meerkat</text>
+                      <text x="213" y="106" class="small" text-anchor="middle">chart analysis</text>
+                    </g>
+                    <g class="mini-node">
+                      <rect x="350" y="56" rx="16" ry="16" width="120" height="72"></rect>
+                      <text x="410" y="87" text-anchor="middle">Calculate Team</text>
+                      <text x="410" y="106" class="small" text-anchor="middle">refresh calc</text>
                     </g>
                     <g class="mini-node store">
-                      <rect x="380" y="56" rx="16" ry="16" width="108" height="72"></rect>
-                      <text x="434" y="87" text-anchor="middle">Meerkat Tools</text>
-                      <text x="434" y="106" class="small" text-anchor="middle">targets refresh</text>
+                      <rect x="550" y="56" rx="16" ry="16" width="110" height="72"></rect>
+                      <text x="605" y="87" text-anchor="middle">Meerkat Tools</text>
+                      <text x="605" y="106" class="small" text-anchor="middle">targets update</text>
                     </g>
                     <g class="mini-node signal">
-                      <rect x="560" y="62" rx="16" ry="16" width="56" height="60"></rect>
-                      <text x="588" y="97" text-anchor="middle">END</text>
+                      <rect x="720" y="62" rx="16" ry="16" width="56" height="60"></rect>
+                      <text x="748" y="97" text-anchor="middle">END</text>
                     </g>
                   </svg>
                 </div>
                 <div class="graph-meta">
                   <div><strong>사용처</strong>: <code>bat_daemon/run.py</code>에서 refresh graph 생성, <code>bat_daemon/integrations/target_refresh.py</code>에서 invoke</div>
-                  <div><strong>특징</strong>: Owl/Hawk 없이 바로 Meerkat로 시작하고 저장 후 종료</div>
-                </div>
-              </div>
-
-              <div class="graph-visual">
-                <h3><code>signal_trigger.py</code> / <code>build_signal_trigger_graph()</code></h3>
-                <p>원래는 Daemon 시그널 도달 시 Owl이 먼저 검증하고 필요시 Meerkat로 이어지는 경량 그래프용으로 만들어졌습니다.</p>
-                <div class="mini-diagram">
-                  <svg viewBox="0 0 810 190" aria-label="Signal Trigger Graph">
-                    <defs>
-                      <marker id="mini-arrow-trigger" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
-                      </marker>
-                    </defs>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M72 62 C110 62, 110 62, 148 62"></path>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M250 62 C284 62, 284 62, 318 62"></path>
-                    <path class="mini-edge dashed" style="marker-end:url(#mini-arrow-trigger)" d="M250 88 C292 118, 318 128, 352 128"></path>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M422 128 C460 128, 460 128, 498 128"></path>
-                    <path class="mini-edge" style="marker-end:url(#mini-arrow-trigger)" d="M602 128 C636 128, 636 128, 670 128"></path>
-                    <g class="mini-node signal">
-                      <rect x="18" y="32" rx="16" ry="16" width="54" height="60"></rect>
-                      <text x="45" y="67" text-anchor="middle">START</text>
-                    </g>
-                    <g class="mini-node">
-                      <rect x="148" y="26" rx="16" ry="16" width="102" height="72"></rect>
-                      <text x="199" y="57" text-anchor="middle">Owl</text>
-                      <text x="199" y="76" class="small" text-anchor="middle">daemon prompt</text>
-                    </g>
-                    <g class="mini-node">
-                      <rect x="318" y="26" rx="16" ry="16" width="104" height="72"></rect>
-                      <text x="370" y="57" text-anchor="middle">Owl Tools</text>
-                      <text x="370" y="76" class="small" text-anchor="middle">always return</text>
-                    </g>
-                    <g class="mini-node">
-                      <rect x="498" y="92" rx="16" ry="16" width="104" height="72"></rect>
-                      <text x="550" y="123" text-anchor="middle">Meerkat</text>
-                      <text x="550" y="142" class="small" text-anchor="middle">full timing only</text>
-                    </g>
-                    <g class="mini-node store">
-                      <rect x="670" y="92" rx="16" ry="16" width="112" height="72"></rect>
-                      <text x="726" y="123" text-anchor="middle">Meerkat Tools</text>
-                      <text x="726" y="142" class="small" text-anchor="middle">save then end</text>
-                    </g>
-                  </svg>
-                </div>
-                <div class="graph-meta">
-                  <div><strong>노드 구성</strong>: Owl Director, Owl Tools, Meerkat Scanner, Meerkat Tools</div>
-                  <div><strong>사용처</strong>: 현재 저장소 내 직접 호출 지점 없음</div>
+                  <div><strong>특징</strong>: Owl/Hawk 없이 Calculate Team 바로 실행</div>
                 </div>
               </div>
 
@@ -1185,7 +1160,7 @@
                 <h3><code>daily_report.py</code> / <code>build_daily_report_graph()</code></h3>
                 <p>공통 그래프와 구조는 같지만 Owl이 daily prompt를 쓰도록 <code>is_daily_review</code>를 전제로 하는 정기 점검용 그래프입니다.</p>
                 <div class="mini-diagram">
-                  <svg viewBox="0 0 830 190" aria-label="Daily Report Graph">
+                  <svg viewBox="0 0 920 190" aria-label="Daily Report Graph">
                     <defs>
                       <marker id="mini-arrow-daily" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M 0 0 L 10 5 L 0 10 z" fill="#bca98d"></path>
@@ -1196,6 +1171,7 @@
                     <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M422 62 C456 62, 456 62, 490 62"></path>
                     <path class="mini-edge dashed" style="marker-end:url(#mini-arrow-daily)" d="M422 88 C454 116, 482 128, 520 128"></path>
                     <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M624 128 C658 128, 658 128, 692 128"></path>
+                    <path class="mini-edge" style="marker-end:url(#mini-arrow-daily)" d="M804 128 C840 128, 840 128, 870 128"></path>
                     <g class="mini-node signal">
                       <rect x="18" y="32" rx="16" ry="16" width="54" height="60"></rect>
                       <text x="45" y="67" text-anchor="middle">START</text>
@@ -1223,7 +1199,11 @@
                     <g class="mini-node store">
                       <rect x="692" y="92" rx="16" ry="16" width="112" height="72"></rect>
                       <text x="748" y="123" text-anchor="middle">Meerkat Tools</text>
-                      <text x="748" y="142" class="small" text-anchor="middle">save then end</text>
+                      <text x="748" y="142" class="small" text-anchor="middle">save targets</text>
+                    </g>
+                    <g class="mini-node signal">
+                      <rect x="870" y="98" rx="16" ry="16" width="54" height="60"></rect>
+                      <text x="897" y="133" text-anchor="middle">END</text>
                     </g>
                   </svg>
                 </div>
@@ -1241,9 +1221,9 @@
             <h3>현재 운영 경로에서 중요한 그래프</h3>
             <p><code>build_common_graph()</code>는 사용자 대화 진입점의 실질적인 메인 그래프이고, <code>build_target_refresh_graph()</code>는 Daemon 후속 재계산 경로의 핵심입니다.</p>
           </div>
-          <div class="graph-path-card">
-            <h3>현재는 대기 중인 그래프</h3>
-            <p><code>build_signal_trigger_graph()</code>, <code>build_daily_report_graph()</code>는 설계상 의미는 있지만 현재 엔트리포인트에 직접 연결되지는 않습니다.</p>
+            <div class="graph-path-card">
+            <h3>확장용 그래프</h3>
+            <p><code>build_daily_report_graph()</code>는 설계상 의미는 있지만 현재 엔트리포인트에 직접 연결되지는 않습니다.</p>
           </div>
         </section>
       </div>
@@ -1257,9 +1237,9 @@
             </div>
             <ul>
               <li><code>strategies</code>: Owl이 저장/수정, Hawk가 조회 및 <code>target_coins</code> 갱신, Meerkat이 조회합니다.</li>
-              <li><code>monitoring_targets</code>: Meerkat이 최종 타점과 <code>buy_allocation_pct</code>를 저장하고, BatDaemon은 <code>WAITING_BUY</code>/<code>HOLDING</code>만 감시합니다. <code>EXPIRED</code>는 감시에서 제외됩니다.</li>
+              <li><code>monitoring_targets</code>: Calculate Team(Dolphin)이 최종 타점과 <code>buy_allocation_pct</code>를 저장하고, BatDaemon은 <code>WAITING_BUY</code>/<code>HOLDING</code>만 감시합니다. <code>EXPIRED</code>는 감시에서 제외됩니다.</li>
               <li><code>wallets</code>: Owl Tools도 조회/수정할 수 있지만, 현재 BatDaemon도 BUY/SELL 시 직접 수정합니다. 지갑에는 자산 외에 전체 체결 이력인 <code>trade_history</code>도 함께 저장됩니다.</li>
-              <li><code>BatDaemon</code>: 조건을 만족하면 즉시 체결하고, 매도 완료 후 EXPIRED 타점을 다시 Meerkat에 맡겨 갱신합니다.</li>
+              <li><code>BatDaemon</code>: 조건을 만족하면 즉시 체결하고, 매도 완료 후 EXPIRED 타점을 다시 Calculation Team에 맡겨 갱신합니다.</li>
             </ul>
           </div>
 
@@ -1279,15 +1259,19 @@
               </div>
               <div class="matrix-card">
                 <h3>Hawk Phase 1</h3>
-                <p><code>store_hawk_candidates</code> 호출 후 Meerkat이 차트 분석 전용 단계로 진입합니다.</p>
+                <p><code>store_hawk_candidates</code> 호출 후 <code>hawk_candidates</code>가 설정되고 Meerkat이 차트 분석 단계로 진입합니다.</p>
               </div>
               <div class="matrix-card">
-                <h3>Meerkat chart_only</h3>
-                <p><code>meerkat_mode == "chart_only"</code>이면 리포트만 만들고 Hawk로 복귀합니다.</p>
+                <h3>Meerkat Scanner</h3>
+                <p>Hawk가 설정한 <code>hawk_candidates</code>의 차트를 LLM 분석하여 AIMessage 리포트를 생성하고 Hawk로 복귀합니다. pipeline 데이터도 state에 저장합니다.</p>
               </div>
               <div class="matrix-card">
-                <h3>Meerkat full timing</h3>
-                <p>전략, 지갑, 최근 매매 기록, 기존 타점을 반영해 최종 타점과 매수 비율을 계산하고 DB에 저장합니다.</p>
+                <h3>Hawk Phase 2 → Calculate Team</h3>
+                <p>Meerkat의 차트 분석 리포트를 기반으로 <code>update_strategy_target_coins</code>를 호출한 후, Meerkat을 다시 거치지 않고 Calculate Team을 직접 호출해 타점을 계산합니다.</p>
+              </div>
+              <div class="matrix-card">
+                <h3>Meerkat → Calculate Team</h3>
+                <p>Meerkat이 차트 분석 후 Calculate Team(Bull/Bear/Dolphin 토론)이 전략, 지갑, 최근 매매 기록, 기존 타점을 반영해 최종 타점과 매수 비율을 계산하고 DB에 저장합니다.</p>
               </div>
               <div class="matrix-card">
                 <h3>BatDaemon HOLDING</h3>
@@ -1303,7 +1287,7 @@
               </div>
               <div class="matrix-card">
                 <h3>Expired Refresh Graph</h3>
-                <p><code>EXPIRED</code> 타점이 발견되면 Meerkat이 새 타점을 계산해 다시 <code>WAITING_BUY</code>로 갱신합니다.</p>
+                <p><code>EXPIRED</code> 타점이 발견되면 Calculate Team이 새 타점을 계산해 다시 <code>WAITING_BUY</code>로 갱신합니다.</p>
               </div>
             </div>
           </div>
@@ -1327,13 +1311,14 @@
           <div class="note">
             <h3>추가 설명이 필요한 부분</h3>
             <ul>
-              <li>Meerkat의 <code>chart_only</code> 단계는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
+               <li>Meerkat은 이제 차트 분석 전용이며, 타점 계산은 Calculate Team(Bull/Bear/Dolphin)이 담당합니다.</li>
+               <li>Meerkat의 <code>hawk_candidates</code> 기반 Hawk 복귀 경로는 DB 저장 단계가 아니라 Hawk의 최종 선정 정확도를 올리기 위한 중간 분석 단계입니다.</li>
               <li>BatDaemon이 발생시키는 BUY/SELL은 이제 실제 체결로 바로 이어집니다. Owl은 이 경로의 체결 검증에 더 이상 개입하지 않습니다.</li>
               <li><code>monitoring_targets.status</code>는 현재 코드 기준으로 <code>WAITING_BUY → HOLDING → EXPIRED → WAITING_BUY</code> 루프를 따릅니다.</li>
               <li><code>bat_daemon/backtest.py</code>와 dashboard의 Backtest 뷰도 이 직접 체결 로직을 backtest_id 전용 DB 문서 기준으로 최대한 동일하게 재생합니다.</li>
               <li>dashboard와 <code>bat_daemon/backtest.py</code>는 원본 전략 <code>user_id</code>를 읽어 백테스트 전용 <code>backtest_id</code>의 전략/지갑/타점을 새로 만든 뒤 과거 tick으로 재생합니다.</li>
               <li>dashboard는 전역 사이드바 대신 Agent 탭과 Bat Daemon 탭 안에서 각각 필요한 입력값을 직접 받도록 정리되어 있습니다.</li>
-              <li><code>signal_trigger.py</code>와 <code>daily_report.py</code>는 지금 당장 엔트리포인트에 연결되어 있지 않지만, 그래프 분리 후보로 남아 있는 구조입니다.</li>
+              <li><code>daily_report.py</code>는 지금 당장 엔트리포인트에 연결되어 있지 않지만, 그래프 분리 후보로 남아 있는 구조입니다.</li>
             </ul>
           </div>
 
@@ -1347,8 +1332,10 @@
               <li><code>magpie_agent/run.py</code></li>
               <li><code>magpie_agent/graphs/common.py</code></li>
               <li><code>magpie_agent/graphs/daily_report.py</code></li>
-              <li><code>magpie_agent/graphs/signal_trigger.py</code></li>
               <li><code>magpie_agent/graphs/target_refresh.py</code></li>
+              <li><code>magpie_agent/agents/calculate_team/subgraph.py</code></li>
+              <li><code>magpie_agent/agents/calculate_team/node.py</code></li>
+              <li><code>magpie_agent/agents/calculate_team/prepare.py</code></li>
               <li><code>magpie_agent/graphs/shared.py</code></li>
               <li><code>magpie_agent/graph.py</code></li>
               <li><code>magpie_agent/agents/owl_director/node.py</code></li>
@@ -1381,6 +1368,7 @@
           "node-user-hawk",
           "node-user-hawktools",
           "node-user-meerkat",
+          "node-user-calculate",
           "node-db-targets",
           "node-user-meerkattools",
         ],

@@ -10,7 +10,7 @@
 
 2. **전략 적합성 평가**
    - 현재 등록된 전략이 최신 시장 상황에 여전히 적합한지 판단하세요.
-   - 전략이 유효하다면 `transfer_to_agent("meerkat_scanner")`를 호출하여
+   - 전략이 유효하다면 `transfer_to_agent("hawk_picker")`를 호출하여
      기존 종목에 대한 타점만 갱신하세요.
    - 전략 수정이 필요하다면 새로운 전략 초안을 사용자에게 보고하지 말고
      직접 `register_strategy_to_nest`를 호출하여 전략을 갱신하세요.
@@ -18,8 +18,8 @@
 
 3. **전략 수정 시 플로우**
    - 전략 수정이 필요하면 `register_strategy_to_nest` 도구로 전략을 갱신하고,
-     Hawk Picker가 새로운 종목을 선정한 뒤 Meerkat이 타점을 계산합니다.
-   - 별도로 `meerkat_scanner`를 직접 호출하지 마세요.
+     Hawk Picker가 새로운 종목을 선정하고 타점을 계산합니다.
+   - 별도로 하위 에이전트를 직접 호출할 필요 없이,
      전략 등록 도구가 Hawk Picker를 자동으로 연결합니다.
 
 4. **요약 보고 (텔레그램 알림)**

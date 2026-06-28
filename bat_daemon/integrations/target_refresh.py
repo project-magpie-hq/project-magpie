@@ -11,6 +11,7 @@ def build_target_refresh_inputs(
     *,
     backtest_time: str | None = None,
     prompt_message: str | None = None,
+    trigger_info: dict | None = None,
 ) -> dict:
     inputs = {
         "user_id": user_id,
@@ -24,6 +25,7 @@ def build_target_refresh_inputs(
         ],
         "from_daemon": True,
         "backtest_time": backtest_time,
+        "trigger_info": trigger_info,
     }
     return inputs
 
@@ -34,6 +36,7 @@ async def invoke_graph_for_target_refresh(
     *,
     backtest_time: str | None = None,
     prompt_message: str | None = None,
+    trigger_info: dict | None = None,
 ) -> None:
     print(f"   ♻️ [Daemon->Refresh]: {user_id}의 EXPIRED 타점을 다시 계산하도록 Meerkat 그래프를 호출합니다.")
     if refresh_graph is None:
@@ -44,5 +47,6 @@ async def invoke_graph_for_target_refresh(
         user_id,
         backtest_time=backtest_time,
         prompt_message=prompt_message,
+        trigger_info=trigger_info,
     )
     await refresh_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
