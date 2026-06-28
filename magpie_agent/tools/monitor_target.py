@@ -94,6 +94,34 @@ async def clear_monitoring_targets_by_user(user_id: str) -> int:
     return result.deleted_count
 
 
+async def remove_monitoring_targets_except(user_id: str, keep_coins: list[str]) -> int:
+    """지정된 코인 리스트에 포함되지 않은 모든 monitoring_targets를 삭제한다.
+
+    Hawk Picker가 최종 선정한 코인 외의 타점을 정리할 때 사용한다.
+
+    Args:
+        user_id: 사용자 ID
+        keep_coins: 유지할 코인 티커 리스트 (예: ['KRW-BTC', 'KRW-SOL'])
+
+    Returns:
+        int: 삭제된 타점 개수
+    """
+    try:
+        filter_query = {
+            "user_id": user_id,
+            "target_coin": {"$nin": keep_coins},
+        }
+        result = await get_monitoring_targets_collection().delete_many(filter_query)
+        deleted = result.deleted_count
+        if deleted > 0:
+            logger.info("Hawk 미선정 코인 타점 %d개 정리 완료 (user_id: %s)", deleted, user_id)
+            print(f"   🗑️ [Cleanup]: Hawk가 선택하지 않은 {deleted}개 타점을 정리했습니다.")
+        return deleted
+    except Exception as e:
+        logger.exception("타점 정리 실패 (user_id: %s): %s", user_id, e)
+        raise RuntimeError("Hawk 미선정 타점 정리 중 DB 오류가 발생했습니다.") from e
+
+
 @tool
 async def get_my_all_monitoring_targets(
     state: Annotated[dict, InjectedState],

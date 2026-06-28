@@ -9,6 +9,7 @@ from db.entity import StrategyEntity
 from db.mongo import get_strategies_collection
 from magpie_agent.agents.hawk_picker.schema import UpdateTargetCoinsInput
 from magpie_agent.agents.owl_director.schema import StrategySchema
+from magpie_agent.tools.monitor_target import remove_monitoring_targets_except
 from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,11 @@ async def update_strategy_target_coins(
         print(f"🪹 [The Nest]: 타겟 코인이 성공적으로 업데이트되었습니다! -> {target_coins}")
     else:
         print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
+
+    # Hawk가 선택하지 않은 코인의 monitoring_targets 정리
+    if target_coins:
+        await remove_monitoring_targets_except(user_id, target_coins)
+
     print("-" * 50)
     print("⚙️ " * 15 + "\n")
 

@@ -99,9 +99,10 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
         )
     )
 
-    print("   ✅ [Meerkat]: 차트 분석 리포트를 생성했습니다. (경로: → Hawk Picker)")
+    print("   ✅ [Meerkat]: 차트 분석 리포트를 생성했습니다. (경로: → Calculate Team)")
 
-    return {"messages": [response]}
+    chart_context = str(response.content) if response.content else ""
+    return {"messages": [response], "chart_context": chart_context}
 
 
 def _get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
