@@ -34,7 +34,6 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
     )
 
     per_coin_results = state.get("per_coin_results") or []
-    chart_analysis = state.get("chart_context") or ""
     target_coins_input = ", ".join(r.get("coin", "") for r in per_coin_results if r.get("coin"))
 
     # Per-Coin 결과를 가독성 좋은 텍스트로 변환
@@ -77,7 +76,7 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
     """
 
     messages_to_llm = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
-    agent = get_hawk_llm(phase=2)
+    agent = get_hawk_llm()
     response_phase2: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
 
     reasoning = cast(str, response_phase2.content or "").strip()
@@ -105,8 +104,8 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
     }
 
 
-def get_hawk_llm(phase: int = 1) -> Runnable[LanguageModelInput, AIMessage]:
-    """Hawk 에이전트 모델 초기화 (Phase 2 전용)"""
+def get_hawk_llm() -> Runnable[LanguageModelInput, AIMessage]:
+    """Hawk 에이전트 모델 초기화"""
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
     return llm.bind_tools([update_strategy_target_coins])
 

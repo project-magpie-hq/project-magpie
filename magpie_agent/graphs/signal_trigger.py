@@ -17,7 +17,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from magpie_agent.agents.constant import NodeNames
-from magpie_agent.agents.owl_director.node import route_after_owl, route_after_owl_tools
+from magpie_agent.agents.owl_director.node import route_after_owl_tools
 from magpie_agent.graphs.shared import (
     add_analyze_and_calculate_subgraph,
     add_owl_and_tools,

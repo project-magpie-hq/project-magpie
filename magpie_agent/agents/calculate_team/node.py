@@ -148,7 +148,8 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
 
     # Dolphin 신뢰도 점수 파싱
-    dolphin_score = _parse_dolphin_score(response.content or "")
+    content_str = str(response.content or "")
+    dolphin_score = _parse_dolphin_score(content_str)
     dolphin_reasoning = (response.content or "")[:800]
 
     return {

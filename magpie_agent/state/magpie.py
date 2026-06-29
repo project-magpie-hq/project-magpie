@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Any
 
 from langgraph.graph import MessagesState
 

@@ -9,6 +9,9 @@ from dashboard.common import pretty_json
 
 NODE_OWL_DIRECTOR = "owl_director"
 NODE_OWL_TOOLS = "owl_tools"
+NODE_FOX_FINDER = "fox_finder"
+NODE_FOX_TOOLS = "fox_tools"
+NODE_PARALLEL_COORDINATOR = "parallel_coordinator"
 NODE_HAWK_PICKER = "hawk_picker"
 NODE_HAWK_TOOLS = "hawk_tools"
 NODE_MEERKAT_SCANNER = "meerkat_scanner"
@@ -17,7 +20,10 @@ NODE_CALCULATE_TEAM_TOOLS = "calculate_team_tools"
 NODE_META: dict[str, tuple[str, str, str]] = {
     NODE_OWL_DIRECTOR: ("🦉", "Owl Director", "사용자 의도 분석 및 전략 수립"),
     NODE_OWL_TOOLS: ("🛠️", "Owl Tools", "Owl이 선택한 도구 실행"),
-    NODE_HAWK_PICKER: ("🦅", "Hawk Picker", "전략 기반 종목 선정 (Phase 1: 후보 / Phase 2: 최종 선정)"),
+    NODE_FOX_FINDER: ("🦊", "Fox Finder", "전략 기반 후보 코인 선정"),
+    NODE_FOX_TOOLS: ("🔧", "Fox Tools", "Fox가 선정한 후보 코인 저장"),
+    NODE_PARALLEL_COORDINATOR: ("⚡", "Parallel Coordinator", "Per-Coin 병렬 분석 실행"),
+    NODE_HAWK_PICKER: ("🦅", "Hawk Picker", "Per-Coin 분석 결과 기반 최종 종목 선정"),
     NODE_HAWK_TOOLS: ("🔧", "Hawk Tools", "Hawk이 선정한 코인 등록/전략 업데이트"),
     NODE_MEERKAT_SCANNER: ("🦦", "Meerkat Scanner", "차트 데이터 분석 및 타점 계산"),
     NODE_CALCULATE_TEAM_TOOLS: ("⚙️", "Calculate Team Tools", "Calculate Team이 생성한 타점 등록"),
@@ -35,12 +41,6 @@ MONGO_TOOL_META: dict[str, dict[str, str]] = {
         "collection": "strategies",
         "desc": "투자 전략을 저장합니다 (upsert)",
         "icon": "💾",
-    },
-    "store_hawk_candidates": {
-        "op": "write",
-        "collection": "strategies",
-        "desc": "Hawk Picker가 1차 선정한 후보 코인을 등록합니다",
-        "icon": "🎯",
     },
     "update_strategy_target_coins": {
         "op": "write",

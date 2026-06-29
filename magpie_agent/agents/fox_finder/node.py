@@ -5,9 +5,9 @@ from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
-from magpie_agent.agents.fox_finder.schema import FoxCandidatesInput
 from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.fox import store_fox_candidates
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 async def fox_node(state: MagpieState) -> dict[str, Any]:
     """Fox Finder: Owl의 전략을 분석하여 많은 후보 타겟을 선정하는 노드
 
-    Hawk Phase 1의 역할을 대체하며, Meerkat의 차트 분석과 Calculate Team의 타점 계산이
+    Meerkat의 차트 분석과 Calculate Team의 타점 계산이
     필요한 후보 코인들을 선정한다.
     """
     print("\n🦊 [Fox]: Owl의 전략을 분석하여 후보 코인을 선정합니다...")

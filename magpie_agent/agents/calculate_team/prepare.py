@@ -19,7 +19,7 @@ async def prepare_calculate_data(state: CalculateTeamState) -> dict[str, Any]:
     """Calculate Team 실행 전 필요한 모든 컨텍스트 데이터를 DB에서 조회한다.
 
     Bull/Bear/Dolphin이 타점 계산에 사용할 데이터를 준비하며,
-    이미 값이 설정되어 있으면(Hawk Phase 2 등) 건너뛴다.
+    이미 값이 설정되어 있으면 건너뛴다.
     """
     print("   📦 [Calc Prepare]: Bull/Bear/Dolphin 컨텍스트 데이터를 준비합니다...")
 

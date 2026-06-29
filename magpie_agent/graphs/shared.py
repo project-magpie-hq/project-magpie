@@ -1,9 +1,8 @@
 import logging
+from functools import partial
 
 from langgraph.graph import END
 from langgraph.prebuilt import ToolNode
-
-from functools import partial
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.fox_finder.node import fox_node
@@ -92,7 +91,7 @@ def add_owl_tools_conditional_edges(workflow, routing_func, owl_tool_routes=None
 
 
 # =========================================================================
-# Fox Finder (후보 종목 선정 — Hawk Phase 1 대체)
+# Fox Finder (후보 종목 선정)
 # =========================================================================
 
 
@@ -179,15 +178,15 @@ def add_coordinator_to_hawk(workflow):
 
 
 # =========================================================================
-# Hawk Picker (최종 종목 선정 — Phase 2 only)
+# Hawk Picker (최종 종목 선정)
 # =========================================================================
 
 
 def add_hawk_and_tools(workflow):
     """Add Hawk Picker node and its tool node to the workflow.
 
-    Hawk는 이제 Phase 2(최종 선정)만 담당하며,
-    Fox → Analyze & Calculate 서브그래프 이후에 실행된다.
+    Hawk는 Per-Coin 분석 결과를 바탕으로 최종 종목을 선정하며,
+    Parallel Coordinator 이후에 실행된다.
     """
     workflow.add_node(NodeNames.HAWK_PICKER.value, hawk_node)
     workflow.add_node(

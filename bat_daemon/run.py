@@ -398,6 +398,7 @@ class BatDaemon:
         await invoke_graph_for_target_refresh(
             self.refresh_graph,
             self.user_id,
+            target_coin=expired_coins[0] if expired_coins else None,
             backtest_time=self.current_event_time if self.backtest_mode else None,
             trigger_info=self.current_trigger_info,
         )
