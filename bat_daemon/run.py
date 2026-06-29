@@ -5,6 +5,7 @@ from typing import Any
 from websockets.exceptions import ConnectionClosed
 
 from bat_daemon.constant import DB_SYNC_INTERVAL_SECONDS, SignalType
+from bat_daemon.integrations.graph_event import invoke_graph_for_trigger
 from bat_daemon.integrations.target_refresh import invoke_graph_for_target_refresh
 from bat_daemon.market_data.candle import CandleTick, ClosedCandle, is_new_candle, parse_closed_candle, parse_tick
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
@@ -12,6 +13,7 @@ from bat_daemon.signals.rules import close_buy_rejection_reason, is_touch_buy_si
 from bat_daemon.stores.target_store import fetch_target_map, fetch_targets_by_status, update_target_status
 from db.entity import TargetEntity, WalletEntity
 from magpie_agent.agents.meerkat_scanner.schema import TargetStatus
+from magpie_agent.graphs.signal_trigger import build_signal_trigger_graph
 from magpie_agent.graphs.target_refresh import build_target_refresh_graph
 from magpie_agent.tools.wallet import (
     apply_trade_to_wallet_entity,
@@ -43,6 +45,7 @@ class BatDaemon:
         self.ws_connection: Any = None
         self.current_candles: dict[str, dict[str, Any]] = {}
         self.refresh_graph = build_target_refresh_graph() if enable_graph and not dry_run else None
+        self.trigger_graph = build_signal_trigger_graph() if enable_graph and not dry_run else None
         self.refresh_task: asyncio.Task | None = None
         self.signal_history: list[dict[str, Any]] = []
         self.current_event_time: str | None = None
@@ -325,6 +328,19 @@ class BatDaemon:
             f"   ✅ [Direct Execution]: {target.target_coin} {signal_type.value} 체결 완료 "
             f"(수량: {volume:.8f}) -> 상태: {new_status.value}"
         )
+
+        # Signal Trigger Graph 호출: Owl → Meerkat → Calculate Team → DB 업데이트
+        if self.trigger_graph is not None:
+            await invoke_graph_for_trigger(
+                self.trigger_graph,
+                self.user_id,
+                target,
+                signal_type,
+                current_price,
+                event_reason,
+            )
+        else:
+            print("   ⏭️ [Daemon->Trigger]: trigger_graph가 없어 Signal Trigger를 건너<0xEB><0x8A><0xB0><0xEB><0x8B><0x88><0xEB><0x8B><0xA4>.")
 
     async def _apply_post_trade_state(self, target: TargetEntity, new_status: TargetStatus) -> None:
         target.status = new_status
