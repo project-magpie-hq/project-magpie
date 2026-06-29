@@ -3,6 +3,8 @@ import logging
 from langgraph.graph import END
 from langgraph.prebuilt import ToolNode
 
+from functools import partial
+
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.fox_finder.node import fox_node
 from magpie_agent.agents.hawk_picker.node import (
@@ -11,6 +13,7 @@ from magpie_agent.agents.hawk_picker.node import (
     route_after_hawk_tools,
 )
 from magpie_agent.agents.owl_director.node import owl_node, route_after_owl
+from magpie_agent.agents.parallel_coordinator import parallel_coordinator_node
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.fox import store_fox_candidates
 from magpie_agent.tools.router import transfer_to_agent
@@ -141,6 +144,37 @@ def add_analyze_and_calculate_subgraph(workflow):
 def add_subgraph_to_hawk(workflow):
     """Connect Analyze & Calculate subgraph to Hawk Picker (최종 선정)."""
     workflow.add_edge(NodeNames.ANALYZE_AND_CALCULATE.value, NodeNames.HAWK_PICKER.value)
+    return workflow
+
+
+# =========================================================================
+# Parallel Coordinator (Per-Coin 병렬 처리)
+# =========================================================================
+
+
+def add_parallel_coordinator(workflow):
+    """Add Parallel Coordinator node (per-coin asyncio.gather) to the workflow.
+
+    Coordinator는 per_coin_pipeline 서브그래프를 참조하여
+    hawk_candidates의 각 코인을 병렬로 실행한다.
+    """
+    from magpie_agent.graphs.per_coin_pipeline import build_per_coin_pipeline
+
+    per_coin = build_per_coin_pipeline()
+    coordinator = partial(parallel_coordinator_node, per_coin_pipeline=per_coin)
+    workflow.add_node(NodeNames.PARALLEL_COORDINATOR.value, coordinator)
+    return workflow
+
+
+def add_fox_tools_to_coordinator(workflow):
+    """Connect Fox Tools to Parallel Coordinator."""
+    workflow.add_edge(NodeNames.FOX_TOOLS.value, NodeNames.PARALLEL_COORDINATOR.value)
+    return workflow
+
+
+def add_coordinator_to_hawk(workflow):
+    """Connect Parallel Coordinator to Hawk Picker."""
+    workflow.add_edge(NodeNames.PARALLEL_COORDINATOR.value, NodeNames.HAWK_PICKER.value)
     return workflow
 
 

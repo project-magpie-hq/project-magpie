@@ -17,21 +17,50 @@ logger = logging.getLogger(__name__)
 
 
 async def hawk_node(state: MagpieState) -> dict[str, Any]:
-    """Hawk Picker: Analyze & Calculate 서브그래프 결과를 바탕으로 최종 종목을 선정하는 노드
+    """Hawk Picker: Per-Coin Pipeline 병렬 처리 결과를 바탕으로 최종 종목을 선정하는 노드
 
-    Fox Finder가 선정한 후보 코인들을 Meerkat과 Calculate Team이 분석/계산한 후,
-    그 결과를 바탕으로 최종 투자 종목을 확정한다.
+    Parallel Coordinator가 각 코인에 대해 Meerkat/Calculate Team을 실행한
+    per_coin_results를 검토하고, 최종 투자 종목을 확정한다.
+    각 코인의 dolphin_score, dolphin_reasoning, Bull/Bear 요약을 참고하여
+    신뢰도가 높은 종목을 선정한다.
     """
-    print("\n🦅 [Hawk]: Analyze & Calculate 결과를 바탕으로 최종 종목을 선정합니다...")
+    print("\n🦅 [Hawk]: Per-Coin Pipeline 결과를 바탕으로 최종 종목을 선정합니다...")
     system_prompt = (
         load_prompt()
         + "\n\n## 현재 단계: 최종 종목 선정\n"
-        + "Analyze & Calculate 서브그래프(Meerkat 차트 분석 + Calculate Team 타점 계산)의 결과를 "
-        + "검토하고 최종 종목을 선정하여 update_strategy_target_coins 도구를 호출하세요."
+        + "Parallel Coordinator가 각 코인에 대해 Per-Coin Pipeline(Meerkat 차트 분석 + "
+        + "Calculate Team 타점 계산)을 병렬 실행한 결과를 검토하고 "
+        + "최종 종목을 선정하여 update_strategy_target_coins 도구를 호출하세요."
     )
 
+    per_coin_results = state.get("per_coin_results") or []
     chart_analysis = state.get("chart_context") or ""
-    target_coins_input = state.get("target_coins") or ""
+    target_coins_input = ", ".join(r.get("coin", "") for r in per_coin_results if r.get("coin"))
+
+    # Per-Coin 결과를 가독성 좋은 텍스트로 변환
+    per_coin_summary_lines = []
+    for r in per_coin_results:
+        coin = r.get("coin", "?")
+        score = r.get("dolphin_score")
+        score_str = f"{score:.2f}" if score is not None else "N/A"
+        reasoning = (r.get("dolphin_reasoning") or "")[:200]
+        bull = (r.get("bull_summary") or "")[:200]
+        bear = (r.get("bear_summary") or "")[:200]
+        price = r.get("current_price")
+        price_str = f"{price:,.0f}원" if price is not None else "N/A"
+        error = r.get("error")
+        if error:
+            per_coin_summary_lines.append(
+                f"[{coin}] ❌ 분석 실패 — {error}"
+            )
+        else:
+            per_coin_summary_lines.append(
+                f"[{coin}] 신뢰도={score_str} | 현재가={price_str}\n"
+                f"  Dolphin: {reasoning}{'...' if len(r.get('dolphin_reasoning', '') or '') > 200 else ''}\n"
+                f"  Bull: {bull}{'...' if len(r.get('bull_summary', '') or '') > 200 else ''}\n"
+                f"  Bear: {bear}{'...' if len(r.get('bear_summary', '') or '') > 200 else ''}"
+            )
+    per_coin_block = "\n\n".join(per_coin_summary_lines) if per_coin_summary_lines else "(결과 없음)"
 
     strategy = await fetch_strategy_by_user(state["user_id"])
     strategy_details = strategy.get("strategy_details", {}) if strategy else {}
@@ -40,10 +69,10 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
     [투자 전략]
     {strategy_details}
 
-    [차트 분석 결과]
-    {chart_analysis}
+    [Per-Coin 분석 결과]
+    {per_coin_block}
 
-    [Calculate Team 계산 대상 코인]
+    [분석 완료 코인 목록]
     {target_coins_input}
     """
 
