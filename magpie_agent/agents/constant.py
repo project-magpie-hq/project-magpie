@@ -14,3 +14,5 @@ class NodeNames(StrEnum):
     CALCULATE_TEAM_TOOLS = "calculate_team_tools"
     # Analyze & Calculate 서브그래프 (Meerkat → Calculate Team)
     ANALYZE_AND_CALCULATE = "analyze_and_calculate"
+    # Parallel Coordinator (per-coin 병렬 처리)
+    PARALLEL_COORDINATOR = "parallel_coordinator"

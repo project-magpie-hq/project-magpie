@@ -30,3 +30,7 @@ class CalculateTeamState(MessagesState):
     bear_analysis: str | None
     bull_rebuttal: str | None
     bear_rebuttal: str | None
+
+    # ---------- Dolphin 평가 ----------
+    dolphin_score: float | None = None  # type: ignore[misc]
+    dolphin_reasoning: str | None = None  # type: ignore[misc]
