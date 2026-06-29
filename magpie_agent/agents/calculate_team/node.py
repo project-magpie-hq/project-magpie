@@ -147,7 +147,29 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         )
         await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
 
-    return {"messages": [response]}
+    # Dolphin 신뢰도 점수 파싱
+    dolphin_score = _parse_dolphin_score(response.content or "")
+    dolphin_reasoning = (response.content or "")[:800]
+
+    return {
+        "messages": [response],
+        "dolphin_score": dolphin_score,
+        "dolphin_reasoning": dolphin_reasoning,
+    }
+
+
+def _parse_dolphin_score(content: str) -> float | None:
+    """Dolphin 응답에서 [DOLPHIN_SCORE]: X.X 형식의 신뢰도 점수를 추출한다."""
+    import re
+
+    match = re.search(r"\[DOLPHIN_SCORE\]\s*:\s*(-?[0-9]*\.?[0-9]+)", content)
+    if match:
+        try:
+            score = float(match.group(1))
+            return max(0.0, min(1.0, score))  # 0.0~1.0 클램프
+        except ValueError:
+            return None
+    return None
 
 
 # =========================================================================
