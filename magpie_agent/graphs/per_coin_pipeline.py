@@ -8,6 +8,7 @@ Parallel Coordinator가 여러 코인을 병렬(asyncio.gather)로 실행할 때
 """
 
 import logging
+import re
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -23,18 +24,85 @@ logger = logging.getLogger(__name__)
 
 
 async def collect_per_coin_result(state: MagpieState) -> dict:
-    """Per-Coin Pipeline 종료 시 결과를 수집하여 per_coin_results에 추가한다."""
+    """Per-Coin Pipeline 종료 시 결과를 수집하여 per_coin_results에 추가한다.
+
+    IMPORTANT: state fields (dolphin_score, bull_analysis, bear_analysis) set
+    inside the CalculateTeamState subgraph may NOT propagate back to this
+    parent MagpieState due to LangGraph schema mismatch.
+    As a fallback, this function extracts data from the messages list
+    (which always propagates correctly via add_messages reducer).
+    """
     coin = state.get("current_target_coin") or "unknown"
+
+    dolphin_score = state.get("dolphin_score")
+    dolphin_reasoning = state.get("dolphin_reasoning", "")
+    bull_analysis = state.get("bull_analysis") or ""
+    bear_analysis = state.get("bear_analysis") or ""
+    chart_context = state.get("chart_context", "")
+    current_price = state.get("current_price")
+
+    # Fallback: extract from messages when state fields are empty.
+    # State fields set inside the CalculateTeamState subgraph (dolphin_score,
+    # bull_analysis, bear_analysis) may not propagate back to this parent
+    # MagpieState due to LangGraph's different-state-schema subgraph handling.
+    # The messages list always propagates correctly via add_messages reducer.
+    messages = state.get("messages", [])
+
+    if dolphin_score is None or dolphin_reasoning == "" or bull_analysis == "" or bear_analysis == "":
+        for msg in reversed(messages):
+            content = str(getattr(msg, "content", "") or "")
+            tool_calls = getattr(msg, "tool_calls", None)
+
+            # Dolphin message: [DOLPHIN_SCORE] or tool_calls
+            if (dolphin_score is None or dolphin_reasoning == "") and (
+                "[DOLPHIN_SCORE]" in content or tool_calls
+            ):
+                score_match = re.search(
+                    r"\[DOLPHIN_SCORE\]\s*:\s*(-?[0-9]*\.?[0-9]+)", content
+                )
+                if score_match and dolphin_score is None:
+                    try:
+                        dolphin_score = max(0.0, min(1.0, float(score_match.group(1))))
+                    except ValueError:
+                        pass
+                if not dolphin_reasoning:
+                    dolphin_reasoning = content[:800]
+
+            # Bull analysis (skip rebuttal/dolphin messages)
+            if not bull_analysis and (
+                ("Bull" in content and ("분석" in content or "관점" in content))
+                or ("📈" in content and len(content) > 100)
+            ):
+                if "[DOLPHIN_SCORE]" not in content and "[Bear의" not in content:
+                    bull_analysis = content[:500]
+
+            # Bear analysis (skip rebuttal/dolphin messages)
+            if not bear_analysis and (
+                ("Bear" in content and ("분석" in content or "관점" in content))
+                or ("📉" in content and len(content) > 100)
+            ):
+                if "[DOLPHIN_SCORE]" not in content and "[Bull의" not in content:
+                    bear_analysis = content[:500]
+
+            # chart_context fallback from Meerkat's message
+            if not chart_context and content and ("차트" in content or "기술" in content or "분석" in content):
+                if "[DOLPHIN_SCORE]" not in content and "Bull" not in content and "Bear" not in content:
+                    chart_context = content
+
+        if dolphin_score is not None and not dolphin_reasoning:
+            dolphin_reasoning = "(메시지에서 Dolphin 판단 근거를 추출할 수 없음)"
+
     result_entry = {
         "coin": coin,
-        "current_price": state.get("current_price"),
-        "chart_context": state.get("chart_context", ""),
-        "dolphin_score": state.get("dolphin_score"),
-        "dolphin_reasoning": state.get("dolphin_reasoning", ""),
-        "bull_summary": (state.get("bull_analysis") or "")[:500],
-        "bear_summary": (state.get("bear_analysis") or "")[:500],
+        "current_price": current_price if current_price is not None else state.get("current_price"),
+        "chart_context": chart_context,
+        "dolphin_score": dolphin_score,
+        "dolphin_reasoning": dolphin_reasoning,
+        "bull_summary": bull_analysis[:500] if bull_analysis else "",
+        "bear_summary": bear_analysis[:500] if bear_analysis else "",
     }
-    print(f"   📦 [Collector]: {coin} 분석 결과 수집 완료 (score={result_entry['dolphin_score']})")
+    score_str = f"{dolphin_score:.2f}" if dolphin_score is not None else "N/A"
+    print(f"   📦 [Collector]: {coin} 분석 결과 수집 완료 (score={score_str})")
     return {"per_coin_results": [result_entry]}
 
 

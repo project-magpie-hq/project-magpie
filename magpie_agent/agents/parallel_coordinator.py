@@ -83,7 +83,24 @@ async def parallel_coordinator_node(
     # 모든 per_coin_results 취합
     all_results: list[dict[str, Any]] = []
     for r in results:
-        all_results.extend(r.get("per_coin_results", []))
+        coin_results = r.get("per_coin_results", [])
+        all_results.extend(coin_results)
+
+    for entry in all_results:
+        c = entry.get("coin", "?")
+        s = entry.get("dolphin_score")
+        err = entry.get("error")
+        score_str = f"{s:.2f}" if s is not None else "N/A"
+        if err:
+            print(f"   📊 [{c}] → score={score_str}, error={err}")
+        else:
+            has_chart = bool(entry.get("chart_context"))
+            has_bull = bool(entry.get("bull_summary"))
+            has_bear = bool(entry.get("bear_summary"))
+            print(
+                f"   📊 [{c}] → score={score_str}, chart={has_chart}, "
+                f"bull={has_bull}, bear={has_bear}"
+            )
 
     print(f"   ✅ [Coordinator]: {len(all_results)}개 코인 분석 완료 (취합)")
     return {"per_coin_results": all_results}
