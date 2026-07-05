@@ -61,7 +61,7 @@ async def register_strategy_to_nest(
                 f"기존 전략이 업데이트되었습니다.\n"
                 f"• 대상 코인: {', '.join(strategy_entity.target_coins) if strategy_entity.target_coins else '미정'}\n"
                 f"• 변경된 전략 세부사항이 DB에 반영되었습니다.\n"
-                f"• Hawk Picker가 새로운 전략으로 분석을 시작합니다."
+                f"• Fox Finder가 새로운 전략으로 타겟 코인을 설정합니다."
             ),
         )
     print("-" * 50)

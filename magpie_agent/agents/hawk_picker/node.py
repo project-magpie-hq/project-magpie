@@ -86,16 +86,25 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
             if tc["name"] == "update_strategy_target_coins":
                 target_coins = tc["args"].get("target_coins", [])
 
-    if reasoning and target_coins:
-        reason_snippet = reasoning[:500]
+    # 항상 Telegram 알림 전송 (선정 결과 유무와 관계없이 프로세스 완료 통지)
+    reason_snippet = reasoning[:1000] if reasoning else ""
+    if target_coins:
         await send_telegram_message(
             chat_id=state["user_id"],
             text=(
-                "🦅 [최종 종목 선정]\n"
-                f"Hawk Picker가 최종 종목을 선정했습니다.\n"
-                f"• 선정 종목: {', '.join(target_coins)}\n"
-                f"• 해당 종목의 타점이 DB에 등록되었습니다.\n\n"
-                f"📝 선정 근거\n{reason_snippet}{'...' if len(reasoning) > 500 else ''}"
+                "🦅 [최종 종목 선정 완료]\n"
+                f"Hawk Picker가 {len(target_coins)}개 종목을 최종 선정했습니다.\n"
+                f"• 선정 종목: {', '.join(target_coins)}\n\n"
+                f"📝 선정 근거\n{reason_snippet}{'...' if len(reasoning) > 1000 else ''}"
+            ),
+        )
+    else:
+        await send_telegram_message(
+            chat_id=state["user_id"],
+            text=(
+                "🦅 [최종 종목 선정 완료]\n"
+                "Hawk Picker가 모든 후보 코인을 검토했으나, "
+                "현재 전략과 시장 상황에 적합한 최종 종목이 없어 선정하지 않았습니다."
             ),
         )
 

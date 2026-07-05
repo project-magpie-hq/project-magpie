@@ -12,6 +12,7 @@ from magpie_agent.agents.utils import load_prompt, normalize_content
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.fox import store_fox_candidates
 from magpie_agent.tools.strategy import fetch_strategy_by_user
+from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,26 @@ async def fox_node(state: MagpieState) -> dict[str, Any]:
 
     if not candidates:
         print("   ⚠️ [Fox]: 후보 코인이 선정되지 않았습니다.")
+        await send_telegram_message(
+            chat_id=state["user_id"],
+            text=(
+                "🦊 [1차 후보 코인 선정]\n"
+                "Fox Finder가 전략을 분석했으나 적합한 후보 코인을 찾지 못했습니다."
+            ),
+        )
     else:
         print(f"   🦊 [Fox]: {len(candidates)}개 후보 코인 선정 -> {candidates}")
+        candidates_str = "\n".join(f"• {c}" for c in candidates)
+        await send_telegram_message(
+            chat_id=state["user_id"],
+            text=(
+                "🦊 [1차 후보 코인 선정]\n"
+                f"Fox Finder가 {len(candidates)}개의 후보 코인을 선정했습니다.\n"
+                f"{candidates_str}\n\n"
+                "🔍 각 코인에 대해 Meerkat 차트 분석 → Calculate Team 타점 계산을 "
+                "병렬로 진행 중입니다..."
+            ),
+        )
 
     return {
         "messages": [response],
