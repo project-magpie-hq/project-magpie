@@ -14,11 +14,16 @@ logger = logging.getLogger(__name__)
 
 @tool(args_schema=MonitoringTargets)
 async def register_monitoring_targets_to_nest(
-    targets: list[TargetSchema], state: Annotated[dict, InjectedState]
+    targets: list[TargetSchema],
+    state: Annotated[dict, InjectedState],
+    dolphin_score: float | None = None,
 ) -> str:
     """미어캣이 계산한 최종 타점 리스트를 DB(The-Nest)의 monitor_targets 컬렉션에 저장하여 Bat 데몬이 감시할 수 있도록 합니다."""
 
     user_id: str = state["user_id"]
+
+    if dolphin_score is not None:
+        print(f"   🐬 [Dolphin]: 신뢰도 점수 = {dolphin_score:.2f}")
 
     target_details = []
     for target in targets:

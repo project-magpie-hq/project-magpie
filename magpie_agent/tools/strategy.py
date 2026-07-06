@@ -159,11 +159,12 @@ async def update_strategy_target_coins(
     else:
         print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
 
-    # Hawk가 선택하지 않은 코인의 monitoring_targets 정리
-    if target_coins:
-        await remove_monitoring_targets_except(user_id, target_coins)
+    # Hawk가 선택하지 않은 코인의 monitoring targets 정리
+    # 각 Per-Coin Pipeline에서 생성된 타점 중 최종 선정되지 않은 것들을 삭제
+    deleted = await remove_monitoring_targets_except(user_id, target_coins)
+    print(f"   🗑️ [Cleanup]: Hawk 미선정 코인 타점 {deleted}개 삭제 완료")
 
     print("-" * 50)
     print("⚙️ " * 15 + "\n")
 
-    return f"타겟 코인이 {target_coins}(으)로 성공적으로 업데이트되었습니다."
+    return f"타겟 코인이 {target_coins}(으)로 성공적으로 업데이트되었습니다. (미선정 타점 {deleted}개 정리)"
