@@ -57,14 +57,13 @@ def add_start_to_owl_edge(workflow):
 def add_owl_conditional_edges(workflow, owl_routes=None):
     """Add Owl's conditional routing edges.
 
-    Default routes: OWL_TOOLS, FOX_FINDER, HAWK_PICKER, END
+    Default routes: OWL_TOOLS, FOX_FINDER, END
     Pass owl_routes to override which destinations are available.
     """
     if owl_routes is None:
         owl_routes = {
             NodeNames.OWL_TOOLS.value: NodeNames.OWL_TOOLS.value,
             NodeNames.FOX_FINDER.value: NodeNames.FOX_FINDER.value,
-            NodeNames.HAWK_PICKER.value: NodeNames.HAWK_PICKER.value,
             END: END,
         }
     workflow.add_conditional_edges(

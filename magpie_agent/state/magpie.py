@@ -36,6 +36,8 @@ class MagpieState(MessagesState):
     # --- Per-Coin 병렬 처리 전용 필드 ---
     # Per-Coin Pipeline에서 현재 처리 중인 코인 (단일 코인 처리용)
     current_target_coin: str | None
+    # Calculate Team에서 사용할 target_coins (per-coin 시 단일 코인, 그 외엔 전체)
+    target_coins: str | None = None
     # 모든 코인의 병렬 처리 결과를 취합한 리스트
     per_coin_results: list[dict[str, Any]] | None
     # Meerkat이 조회한 현재가 (Calculate Team이 참조)
