@@ -32,7 +32,6 @@ class StrategySchema(BaseModel):
 
 class AgentEnum(StrEnum):
     FOX = "fox_finder"
-    HAWK = "hawk_picker"
     END = END
 
 
