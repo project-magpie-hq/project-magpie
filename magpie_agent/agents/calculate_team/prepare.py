@@ -29,27 +29,48 @@ async def prepare_calculate_data(state: CalculateTeamState) -> dict[str, Any]:
     chart_context = state.get("chart_context") or ""
     if not chart_context:
         messages = state.get("messages", [])
-        if messages and hasattr(messages[-1], "content"):
-            chart_context = str(messages[-1].content) if messages[-1].content else ""
+        msg_debug = f"messages={len(messages)}개"
+        if messages:
+            last = messages[-1]
+            last_content = str(getattr(last, "content", "") or "")[:80]
+            msg_debug += f", 마지막 msg type={type(last).__name__}, content='{last_content}...'"
+            if hasattr(last, "content"):
+                chart_context = str(last.content) if last.content else ""
+            if not chart_context:
+                msg_debug += " → content empty"
+        chart_context_src = "(messages fallback)"
+        print(f"   🔍 [Debug]: chart_context={chart_context is not None}, len={len(chart_context) if chart_context else 0}, src={chart_context_src}, {msg_debug}" if chart_context else f"   🔍 [Debug]: chart_context=EMPTY/None, src={chart_context_src}, {msg_debug}")
         if not chart_context:
             chart_context = "(차트 분석 없음)"
+            print("   🔍 [Debug]: chart_context → '(차트 분석 없음)' 으로 fallback")
+    else:
+        print(f"   🔍 [Debug]: chart_context={len(chart_context)}자 from state 직접 전달, 앞 80자: '{chart_context[:80]}...'")
 
     # 2. 전략 정보 + 타겟 코인 목록
     strategy_details = state.get("strategy_details")
     target_coins = state.get("target_coins")
-    if not strategy_details and user_id:
-        try:
-            strategy = await fetch_strategy_by_user(user_id)
-            if strategy:
-                strategy_details = str(strategy.get("strategy_details", {}))
-                if not target_coins:
+    if not target_coins:
+        current_target_coin = state.get("current_target_coin")
+        print(f"   🔍 [Debug]: target_coins=None, current_target_coin='{current_target_coin}'")
+        if current_target_coin:
+            target_coins = str([current_target_coin])
+            print(f"   🔍 [Debug]: target_coins 협소화 → {target_coins}")
+        elif user_id:
+            try:
+                strategy = await fetch_strategy_by_user(user_id)
+                if strategy:
+                    strategy_details = strategy_details or str(strategy.get("strategy_details", {}))
                     target_coins = str(strategy.get("target_coins", []))
-        except Exception as e:
-            logger.warning("전략 정보 조회 실패 (user_id: %s): %s", user_id, e)
+                    print(f"   🔍 [Debug]: target_coins 전략 DB fallback → {target_coins}")
+            except Exception as e:
+                logger.warning("전략 정보 조회 실패 (user_id: %s): %s", user_id, e)
+    else:
+        print(f"   🔍 [Debug]: target_coins='{target_coins}' (state에 이미 있음)")
     if not strategy_details:
         strategy_details = "(정보 없음)"
     if not target_coins:
         target_coins = "(없음)"
+        print(f"   🔍 [Debug]: target_coins → '(없음)' 으로 최종 fallback")
 
     # 3. 지갑 정보
     wallet_data = state.get("wallet_data")

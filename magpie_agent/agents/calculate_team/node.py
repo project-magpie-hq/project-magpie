@@ -147,9 +147,22 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         )
         await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
 
-    # Dolphin 신뢰도 점수 파싱
+    # Dolphin 신뢰도 점수 파싱 (content text → regex)
     content_str = str(response.content or "")
     dolphin_score = _parse_dolphin_score(content_str)
+
+    # Fallback: tool_choice="any"로 인해 content가 비어있을 때 tool_calls.args에서 추출
+    if dolphin_score is None and response.tool_calls:
+        for tc in response.tool_calls:
+            args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
+            score_val = args.get("dolphin_score") if isinstance(args, dict) else None
+            if score_val is not None:
+                try:
+                    dolphin_score = max(0.0, min(1.0, float(score_val)))
+                    break
+                except (ValueError, TypeError):
+                    continue
+
     dolphin_reasoning = (response.content or "")[:800]
 
     return {
