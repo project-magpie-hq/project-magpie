@@ -34,7 +34,7 @@ async def parallel_coordinator_node(
     """
     target_coins: list[str] = state.get("hawk_candidates") or []
     if not target_coins:
-        print("   ⚠️ [Coordinator]: hawk_candidates가 비어 있어 병렬 처리를 건너<0xEB><0x8A><0xB0><0xEB><0x8B><0x88><0xEB><0x8B><0xA4>.")
+        print("   ⚠️ [Coordinator]: hawk_candidates가 비어 있어 병렬 처리를 건너뜁니다.")
         return {"per_coin_results": []}
 
     print(f"\n⚡ [Coordinator]: {len(target_coins)}개 코인 병렬 분석 시작...")
@@ -97,10 +97,7 @@ async def parallel_coordinator_node(
             has_chart = bool(entry.get("chart_context"))
             has_bull = bool(entry.get("bull_summary"))
             has_bear = bool(entry.get("bear_summary"))
-            print(
-                f"   📊 [{c}] → score={score_str}, chart={has_chart}, "
-                f"bull={has_bull}, bear={has_bear}"
-            )
+            print(f"   📊 [{c}] → score={score_str}, chart={has_chart}, bull={has_bull}, bear={has_bear}")
 
     print(f"   ✅ [Coordinator]: {len(all_results)}개 코인 분석 완료 (취합)")
     return {"per_coin_results": all_results}

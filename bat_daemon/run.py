@@ -340,7 +340,7 @@ class BatDaemon:
                 event_reason,
             )
         else:
-            print("   ⏭️ [Daemon->Trigger]: trigger_graph가 없어 Signal Trigger를 건너<0xEB><0x8A><0xB0><0xEB><0x8B><0x88><0xEB><0x8B><0xA4>.")
+            print("   ⏭️ [Daemon->Trigger]: trigger_graph가 없어 Signal Trigger를 건너뜁니다.")
 
     async def _apply_post_trade_state(self, target: TargetEntity, new_status: TargetStatus) -> None:
         target.status = new_status
