@@ -51,3 +51,8 @@ class TargetSchema(BaseModel):
 
 class MonitoringTargets(BaseModel):
     targets: list[TargetSchema] = Field(description="계산된 각 코인별 타점 리스트")
+    dolphin_score: float | None = Field(
+        None,
+        description="Dolphin Judge가 Bull/Bear 토론 후 산출한 신뢰도 점수 (0.0~1.0). "
+        "1.0에 가까울수록 타점 결정에 대한 확신이 높음을 의미.",
+    )

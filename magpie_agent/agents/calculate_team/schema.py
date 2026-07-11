@@ -16,6 +16,7 @@ class CalculateTeamState(MessagesState):
 
     # ---------- 입력 (부모 그래프에서 전달) ----------
     user_id: str
+    current_target_coin: str | None = None  # type: ignore[misc]
     strategy_details: str | None = None  # type: ignore[misc]
     chart_context: str | None = None  # type: ignore[misc]
     feedback_data: str | None = None  # type: ignore[misc]
@@ -30,3 +31,7 @@ class CalculateTeamState(MessagesState):
     bear_analysis: str | None
     bull_rebuttal: str | None
     bear_rebuttal: str | None
+
+    # ---------- Dolphin 평가 ----------
+    dolphin_score: float | None = None  # type: ignore[misc]
+    dolphin_reasoning: str | None = None  # type: ignore[misc]

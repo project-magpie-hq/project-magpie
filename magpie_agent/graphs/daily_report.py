@@ -7,17 +7,17 @@ from langgraph.graph.state import CompiledStateGraph
 
 from magpie_agent.agents.owl_director.node import route_after_owl_tools
 from magpie_agent.graphs.shared import (
-    add_calculate_team,
-    add_calculate_team_to_tools,
-    add_calculate_team_tools_to_end,
+    add_coordinator_to_hawk,
+    add_fox_and_tools,
+    add_fox_conditional_edges,
+    add_fox_tools_to_coordinator,
     add_hawk_and_tools,
     add_hawk_conditional_edges,
     add_hawk_tools_conditional_edges,
-    add_meerkat_and_tools,
-    add_meerkat_to_hawk,
     add_owl_and_tools,
     add_owl_conditional_edges,
     add_owl_tools_conditional_edges,
+    add_parallel_coordinator,
     add_start_to_owl_edge,
 )
 from magpie_agent.state.magpie import MagpieState
@@ -37,26 +37,26 @@ def build_daily_report_graph() -> CompiledStateGraph:
     호출 시 `is_daily_review=True`를 상태에 설정하여
     Owl이 정기 검진 전용 프롬프트(prompt_from_daily.md)를 사용하도록 합니다.
 
-    Flow: Owl(daily prompt) → (전략 수정시: register_strategy → Hawk → Meerkat → Hawk → Calculate Team)
-                              / (불필요시: transfer_to_agent("hawk_picker") → Hawk → Calculate Team)
-                              → Tools → END
+    Flow: Owl(daily prompt) → Fox → Parallel Coordinator → Hawk → Tools → END
     """
     try:
         workflow = StateGraph(MagpieState)
 
+        # 노드 등록
         add_owl_and_tools(workflow)
+        add_fox_and_tools(workflow)
+        add_parallel_coordinator(workflow)
         add_hawk_and_tools(workflow)
-        add_meerkat_and_tools(workflow)
-        add_calculate_team(workflow)
 
+        # 엣지 연결
         add_start_to_owl_edge(workflow)
         add_owl_conditional_edges(workflow)
         add_owl_tools_conditional_edges(workflow, route_after_owl_tools)
+        add_fox_conditional_edges(workflow)
+        add_fox_tools_to_coordinator(workflow)
+        add_coordinator_to_hawk(workflow)
         add_hawk_conditional_edges(workflow)
         add_hawk_tools_conditional_edges(workflow)
-        add_meerkat_to_hawk(workflow)
-        add_calculate_team_to_tools(workflow)
-        add_calculate_team_tools_to_end(workflow)
 
         memory = MemorySaver()
         return workflow.compile(checkpointer=memory)

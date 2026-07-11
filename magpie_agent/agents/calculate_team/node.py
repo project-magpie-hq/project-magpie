@@ -147,7 +147,43 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         )
         await send_telegram_message(chat_id=state["user_id"], text=tg_summary)
 
-    return {"messages": [response]}
+    # Dolphin 신뢰도 점수 파싱 (content text → regex)
+    content_str = str(response.content or "")
+    dolphin_score = _parse_dolphin_score(content_str)
+
+    # Fallback: tool_choice="any"로 인해 content가 비어있을 때 tool_calls.args에서 추출
+    if dolphin_score is None and response.tool_calls:
+        for tc in response.tool_calls:
+            args = tc.get("args", {}) if isinstance(tc, dict) else getattr(tc, "args", {})
+            score_val = args.get("dolphin_score") if isinstance(args, dict) else None
+            if score_val is not None:
+                try:
+                    dolphin_score = max(0.0, min(1.0, float(score_val)))
+                    break
+                except (ValueError, TypeError):
+                    continue
+
+    dolphin_reasoning = (response.content or "")[:800]
+
+    return {
+        "messages": [response],
+        "dolphin_score": dolphin_score,
+        "dolphin_reasoning": dolphin_reasoning,
+    }
+
+
+def _parse_dolphin_score(content: str) -> float | None:
+    """Dolphin 응답에서 [DOLPHIN_SCORE]: X.X 형식의 신뢰도 점수를 추출한다."""
+    import re
+
+    match = re.search(r"\[DOLPHIN_SCORE\]\s*:\s*(-?[0-9]*\.?[0-9]+)", content)
+    if match:
+        try:
+            score = float(match.group(1))
+            return max(0.0, min(1.0, score))  # 0.0~1.0 클램프
+        except ValueError:
+            return None
+    return None
 
 
 # =========================================================================

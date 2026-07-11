@@ -9,6 +9,7 @@ def build_target_refresh_thread_id(user_id: str) -> str:
 def build_target_refresh_inputs(
     user_id: str,
     *,
+    target_coin: str | None = None,
     backtest_time: str | None = None,
     prompt_message: str | None = None,
     trigger_info: dict | None = None,
@@ -27,6 +28,8 @@ def build_target_refresh_inputs(
         "backtest_time": backtest_time,
         "trigger_info": trigger_info,
     }
+    if target_coin:
+        inputs["current_target_coin"] = target_coin
     return inputs
 
 
@@ -34,6 +37,7 @@ async def invoke_graph_for_target_refresh(
     refresh_graph,
     user_id: str,
     *,
+    target_coin: str | None = None,
     backtest_time: str | None = None,
     prompt_message: str | None = None,
     trigger_info: dict | None = None,
@@ -45,6 +49,7 @@ async def invoke_graph_for_target_refresh(
     thread_id = build_target_refresh_thread_id(user_id)
     inputs = build_target_refresh_inputs(
         user_id,
+        target_coin=target_coin,
         backtest_time=backtest_time,
         prompt_message=prompt_message,
         trigger_info=trigger_info,

@@ -30,24 +30,32 @@ def build_graph_inputs(
         "user_id": user_id,
         "messages": [user_message],
         "from_daemon": True,
+        "current_target_coin": target_entity.target_coin,
+        "trigger_info": event_data,
     }
 
 
 async def invoke_graph_for_trigger(
-    magpie_graph,
+    trigger_graph,
     user_id: str,
     target_entity: TargetEntity,
     signal_type: SignalType,
     current_price: float,
     event_reason: str,
 ) -> None:
-    print(
-        f"   🤝 [Daemon->Graph]: {user_id} / {target_entity.target_coin} / "
-        f"{signal_type} 이벤트를 Owl 그래프로 전달합니다."
-    )
-    if magpie_graph is None:
-        raise RuntimeError("magpie_graph is not initialized")
+    """Bat Daemon이 매매 체결 후 Signal Trigger 그래프를 호출한다.
 
-    thread_id = build_graph_thread_id(user_id, target_entity.target_coin, signal_type)
+    trigger_graph는 build_signal_trigger_graph()로 생성된 CompiledStateGraph.
+    """
+    coin = target_entity.target_coin
+    print(
+        f"   🤝 [Daemon->Trigger]: {user_id} / {coin} / "
+        f"{signal_type} 체결 완료 → Signal Trigger 그래프 호출"
+    )
+    if trigger_graph is None:
+        raise RuntimeError("trigger_graph is not initialized")
+
+    thread_id = build_graph_thread_id(user_id, coin, signal_type)
     inputs = build_graph_inputs(user_id, target_entity, signal_type, current_price, event_reason)
-    await magpie_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    await trigger_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    print(f"   ✅ [Daemon->Trigger]: {coin} Signal Trigger 그래프 처리 완료")

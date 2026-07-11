@@ -12,6 +12,34 @@ DAY_CANDLE_COUNT = 120
 HOUR_CANDLE_COUNT = 72
 ATR_PERIOD = 14
 
+MAX_RETRIES = 5
+RETRY_DELAY = 5.0
+API_CALL_DELAY = 0.5
+
+
+async def _fetch_ohlcv_with_retry(
+    coin: str, interval: str, count: int, backtest_time: str | None = None
+) -> "pd.DataFrame | None":
+    """pyupbit.get_ohlcv 호출을 재시도 로직과 함께 실행한다."""
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            df = await asyncio.to_thread(
+                pyupbit.get_ohlcv, coin, interval=interval, count=count, to=backtest_time
+            )
+            if df is not None and not df.empty:
+                return df
+            if attempt < MAX_RETRIES:
+                logger.warning("[%s] %s 데이터 반환 None/empty, %d/%d 재시도...", coin, interval, attempt, MAX_RETRIES)
+                await asyncio.sleep(RETRY_DELAY * attempt)
+        except Exception as e:
+            if attempt < MAX_RETRIES:
+                logger.warning("[%s] %s API 호출 실패 (attempt %d/%d): %s, 재시도...", coin, interval, attempt, MAX_RETRIES, e)
+                await asyncio.sleep(RETRY_DELAY * attempt)
+            else:
+                logger.exception("[%s] %s API 호출 최종 실패 (모든 재시도 소진)", coin, interval)
+                raise
+    return None
+
 
 async def generate_chart_context(target_coins: list[str], backtest_time: str | None = None) -> str:
     """
@@ -24,15 +52,12 @@ async def generate_chart_context(target_coins: list[str], backtest_time: str | N
 
     for coin in target_coins:
         try:
-            df_day = await asyncio.to_thread(
-                pyupbit.get_ohlcv, coin, interval="day", count=DAY_CANDLE_COUNT, to=backtest_time
-            )
-            df_hour = await asyncio.to_thread(
-                pyupbit.get_ohlcv, coin, interval="minute60", count=HOUR_CANDLE_COUNT, to=backtest_time
-            )
+            df_day = await _fetch_ohlcv_with_retry(coin, "day", DAY_CANDLE_COUNT, backtest_time)
+            await asyncio.sleep(API_CALL_DELAY)
+            df_hour = await _fetch_ohlcv_with_retry(coin, "minute60", HOUR_CANDLE_COUNT, backtest_time)
         except Exception as e:
-            logger.exception("[%s] 차트 데이터 API 호출 실패", coin)
-            context_reports.append(f"[{coin}] 데이터 조회 실패: {e}\n")
+            logger.exception("[%s] 차트 데이터 API 호출 최종 실패 (재시도 소진)", coin)
+            context_reports.append(f"[{coin}] 데이터 조회 실패 (재시도 소진): {e}\n")
             continue
 
         if df_day is None or df_day.empty or df_hour is None or df_hour.empty:

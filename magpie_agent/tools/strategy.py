@@ -9,6 +9,7 @@ from db.entity import StrategyEntity
 from db.mongo import get_strategies_collection
 from magpie_agent.agents.hawk_picker.schema import UpdateTargetCoinsInput
 from magpie_agent.agents.owl_director.schema import StrategySchema
+from magpie_agent.tools.monitor_target import remove_monitoring_targets_except
 from magpie_agent.tools.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ async def register_strategy_to_nest(
                 f"기존 전략이 업데이트되었습니다.\n"
                 f"• 대상 코인: {', '.join(strategy_entity.target_coins) if strategy_entity.target_coins else '미정'}\n"
                 f"• 변경된 전략 세부사항이 DB에 반영되었습니다.\n"
-                f"• Hawk Picker가 새로운 전략으로 분석을 시작합니다."
+                f"• Fox Finder가 새로운 전략으로 타겟 코인을 설정합니다."
             ),
         )
     print("-" * 50)
@@ -157,7 +158,13 @@ async def update_strategy_target_coins(
         print(f"🪹 [The Nest]: 타겟 코인이 성공적으로 업데이트되었습니다! -> {target_coins}")
     else:
         print("⚠️ [The Nest]: 업데이트할 전략이 없습니다. (혹시 전략이 등록되지 않았나요?)")
+
+    # Hawk가 선택하지 않은 코인의 monitoring targets 정리
+    # 각 Per-Coin Pipeline에서 생성된 타점 중 최종 선정되지 않은 것들을 삭제
+    deleted = await remove_monitoring_targets_except(user_id, target_coins)
+    print(f"   🗑️ [Cleanup]: Hawk 미선정 코인 타점 {deleted}개 삭제 완료")
+
     print("-" * 50)
     print("⚙️ " * 15 + "\n")
 
-    return f"타겟 코인이 {target_coins}(으)로 성공적으로 업데이트되었습니다."
+    return f"타겟 코인이 {target_coins}(으)로 성공적으로 업데이트되었습니다. (미선정 타점 {deleted}개 정리)"
