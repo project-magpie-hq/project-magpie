@@ -37,15 +37,20 @@ def build_session_stats_from_signal_history(signal_history: list[dict]) -> Trade
             continue
 
         assert isinstance(signal_type, str), f"signal_type must be str, got {type(signal_type)}"
-        assert isinstance(volume, str), f"volume must be str, got {type(volume)}"
+
+        try:
+            parsed_volume = float(volume)
+            parsed_price = float(price)
+        except (TypeError, ValueError) as exc:
+            raise AssertionError(f"invalid trade payload: price={price}, volume={volume}") from exc
 
         trades.append(
             TradeHistoryEntry(
                 market=signal["target_coin"],
                 signal=SignalType(signal_type),
-                price=float(price),
-                volume=float(volume),
-                total_price=float(price) * float(volume),
+                price=parsed_price,
+                volume=parsed_volume,
+                total_price=parsed_price * parsed_volume,
             )
         )
 
