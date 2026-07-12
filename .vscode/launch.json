@@ -33,8 +33,10 @@
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
       "args": [
-        "--user-id",
+        "--strategy-user-id",
         "test_developer_001",
+        "--backtest-id",
+        "backtest_001",
         "--start",
         "2024-01-01 00:00:00",
         "--end",
