@@ -12,6 +12,7 @@ IMPORTANT: 이 그래프는 calculate_team.subgraph 대신 Bull/Bear/Dolphin 노
 자연스럽게 흐르도록 보장한다.
 """
 
+import contextlib
 import logging
 import re
 
@@ -61,17 +62,11 @@ async def collect_per_coin_result(state: MagpieState) -> dict:
             tool_calls = getattr(msg, "tool_calls", None)
 
             # Dolphin message
-            if (dolphin_score is None or dolphin_reasoning == "") and (
-                "[DOLPHIN_SCORE]" in content or tool_calls
-            ):
-                score_match = re.search(
-                    r"\[DOLPHIN_SCORE\]\s*:\s*(-?[0-9]*\.?[0-9]+)", content
-                )
+            if (dolphin_score is None or dolphin_reasoning == "") and ("[DOLPHIN_SCORE]" in content or tool_calls):
+                score_match = re.search(r"\[DOLPHIN_SCORE\]\s*:\s*(-?[0-9]*\.?[0-9]+)", content)
                 if score_match and dolphin_score is None:
-                    try:
+                    with contextlib.suppress(ValueError):
                         dolphin_score = max(0.0, min(1.0, float(score_match.group(1))))
-                    except ValueError:
-                        pass
 
                 if dolphin_score is None and tool_calls:
                     for tc in tool_calls:
@@ -88,25 +83,39 @@ async def collect_per_coin_result(state: MagpieState) -> dict:
                     dolphin_reasoning = content[:800]
 
             # Bull analysis
-            if not bull_analysis and (
-                ("Bull" in content and ("분석" in content or "관점" in content))
-                or ("📈" in content and len(content) > 100)
+            if (
+                not bull_analysis
+                and (
+                    ("Bull" in content and ("분석" in content or "관점" in content))
+                    or ("📈" in content and len(content) > 100)
+                )
+                and "[DOLPHIN_SCORE]" not in content
+                and "[Bear의" not in content
             ):
-                if "[DOLPHIN_SCORE]" not in content and "[Bear의" not in content:
-                    bull_analysis = content[:500]
+                bull_analysis = content[:500]
 
             # Bear analysis
-            if not bear_analysis and (
-                ("Bear" in content and ("분석" in content or "관점" in content))
-                or ("📉" in content and len(content) > 100)
+            if (
+                not bear_analysis
+                and (
+                    ("Bear" in content and ("분석" in content or "관점" in content))
+                    or ("📉" in content and len(content) > 100)
+                )
+                and "[DOLPHIN_SCORE]" not in content
+                and "[Bull의" not in content
             ):
-                if "[DOLPHIN_SCORE]" not in content and "[Bull의" not in content:
-                    bear_analysis = content[:500]
+                bear_analysis = content[:500]
 
             # chart_context fallback from Meerkat's message
-            if not chart_context and content and ("차트" in content or "기술" in content or "분석" in content):
-                if "[DOLPHIN_SCORE]" not in content and "Bull" not in content and "Bear" not in content:
-                    chart_context = content
+            if (
+                not chart_context
+                and content
+                and ("차트" in content or "기술" in content or "분석" in content)
+                and "[DOLPHIN_SCORE]" not in content
+                and "Bull" not in content
+                and "Bear" not in content
+            ):
+                chart_context = content
 
         if dolphin_score is not None and not dolphin_reasoning:
             dolphin_reasoning = "(메시지에서 Dolphin 판단 근거를 추출할 수 없음)"

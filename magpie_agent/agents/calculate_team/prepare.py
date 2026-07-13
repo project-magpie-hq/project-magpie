@@ -70,7 +70,7 @@ async def prepare_calculate_data(state: CalculateTeamState) -> dict[str, Any]:
         strategy_details = "(정보 없음)"
     if not target_coins:
         target_coins = "(없음)"
-        print(f"   🔍 [Debug]: target_coins → '(없음)' 으로 최종 fallback")
+        print("   🔍 [Debug]: target_coins → '(없음)' 으로 최종 fallback")
 
     # 3. 지갑 정보
     wallet_data = state.get("wallet_data")

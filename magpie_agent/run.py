@@ -76,7 +76,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Calculate Team (Bull/Bear/Dolphin) 활동 표시
             if "calculate_team" in event:
-                await update.message.reply_text("🐂🐻🐬 [Calculate Team]: Bull/Bear 토론 및 Dolphin 최종 타점 계산을 완료했습니다.")
+                await update.message.reply_text(
+                    "🐂🐻🐬 [Calculate Team]: Bull/Bear 토론 및 Dolphin 최종 타점 계산을 완료했습니다."
+                )
 
     except Exception as e:
         logger.exception("메시지 처리 중 오류 발생")

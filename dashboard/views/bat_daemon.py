@@ -5,11 +5,8 @@ import pandas as pd
 import streamlit as st
 
 from bat_daemon.backtest import (
-    _candle_path,
-    _load_backtest_universe,
-    _load_historical_data,
-    _to_upbit_tick,
-    prepare_backtest_environment,
+    build_backtest_result,
+    collect_backtest_run,
 )
 from bat_daemon.market_data.upbit_ws import connect_upbit_ws, receive_candle_tick, subscribe_candles
 from bat_daemon.run import BatDaemon
@@ -17,7 +14,6 @@ from bat_daemon.session_stats import build_session_stats_from_signal_history
 from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
 from db.entity import TargetEntity, WalletEntity
-from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
 
 
@@ -204,100 +200,6 @@ async def collect_live_daemon_sample(user_id: str, max_ticks: int, timeout_secon
         "current_candles": bat.current_candles,
         "wallet": bat.simulated_wallet,
         "wallet_user_id": bat.wallet_user_id,
-    }
-
-
-async def collect_backtest_daemon_sample(
-    strategy_user_id: str,
-    backtest_id: str,
-    start: str,
-    end: str,
-    initial_balance: float,
-    max_tick_rows: int,
-) -> dict[str, Any]:
-    await prepare_backtest_environment(strategy_user_id, backtest_id, start, initial_balance)
-
-    bat = BatDaemon(
-        backtest_id,
-        wallet_user_id=backtest_id,
-        dry_run=False,
-        enable_graph=True,
-        backtest_mode=True,
-    )
-    await bat.load_targets_from_db_once()
-    initial_targets = {coin: target.model_copy(deep=True) for coin, target in bat.active_targets.items()}
-
-    if not bat.watching_coins:
-        return backtest_result(initial_targets, bat.active_targets, "monitoring target이 없습니다.")
-
-    backtest_universe = await _load_backtest_universe(backtest_id)
-    historical_data = await _load_historical_data(backtest_universe or bat.watching_coins, start, end)
-    if not historical_data:
-        return backtest_result(initial_targets, bat.active_targets, "로드된 과거 캔들이 없습니다.")
-
-    tick_rows: list[dict[str, Any]] = []
-    processed_ticks = 0
-    timeline = sorted(set().union(*[df.index for df in historical_data.values()]))
-
-    for candle_time in timeline:
-        for coin, df in historical_data.items():
-            if candle_time not in df.index:
-                continue
-
-            candle = df.loc[candle_time]
-            for _, trade_price in _candle_path(candle):
-                tick = _to_upbit_tick(coin, candle_time, candle, trade_price)
-                target_before = (
-                    bat.active_targets[coin].model_copy(deep=True) if coin in bat.active_targets else None
-                )
-                signal_count_before = len(bat.signal_history)
-                await bat.process_candle_tick(coin, tick)
-                if bat.refresh_task is not None:
-                    await bat.wait_for_refresh_completion()
-                target_after = bat.active_targets.get(coin)
-                new_signals = bat.signal_history[signal_count_before:]
-                processed_ticks += 1
-
-                if len(tick_rows) < max_tick_rows or new_signals:
-                    tick_rows.append(tick_event_row(coin, tick, target_before, target_after, new_signals, "backtest"))
-
-    await bat.flush_current_candles()
-    await bat.wait_for_refresh_completion()
-
-    return {
-        "initial_targets": initial_targets,
-        "final_targets": bat.active_targets,
-        "tick_rows": tick_rows,
-        "signals": bat.signal_history,
-        "session_stats": build_session_stats_from_signal_history(bat.signal_history),
-        "processed_ticks": processed_ticks,
-        "loaded_candles": {coin: len(df) for coin, df in historical_data.items()},
-        "wallet": await fetch_wallet_by_user(backtest_id),
-        "wallet_user_id": backtest_id,
-        "strategy_user_id": strategy_user_id,
-        "backtest_id": backtest_id,
-        "generated_targets": await fetch_monitoring_targets_by_user(backtest_id),
-    }
-
-
-def backtest_result(
-    initial_targets: dict[str, TargetEntity],
-    final_targets: dict[str, TargetEntity],
-    error: str,
-) -> dict[str, Any]:
-    return {
-        "initial_targets": initial_targets,
-        "final_targets": final_targets,
-        "tick_rows": [],
-        "signals": [],
-        "session_stats": None,
-        "processed_ticks": 0,
-        "error": error,
-        "wallet": None,
-        "wallet_user_id": None,
-        "strategy_user_id": None,
-        "backtest_id": None,
-        "generated_targets": None,
     }
 
 
@@ -527,17 +429,17 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
         with st.spinner("백테스트 전용 전략/지갑/타점을 준비하고 과거 캔들을 재생하는 중..."):
             try:
                 st.session_state.bat_backtest_result = run_async_task(
-                    collect_backtest_daemon_sample(
+                    collect_backtest_run(
                         strategy_user_id,
                         backtest_id,
                         start,
                         end,
                         float(initial_balance),
-                        int(max_tick_rows),
+                        max_tick_rows=int(max_tick_rows),
                     )
                 )
             except Exception as exc:
-                st.session_state.bat_backtest_result = backtest_result({}, {}, str(exc))
+                st.session_state.bat_backtest_result = build_backtest_result({}, {}, str(exc))
 
     result = st.session_state.get("bat_backtest_result")
     if not result:
@@ -545,6 +447,7 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
 
     if result.get("error"):
         st.warning(result["error"])
+        return
 
     metric_cols = st.columns(4)
     metric_cols[0].metric("처리 tick", f"{result.get('processed_ticks', 0):,}")
