@@ -4,11 +4,11 @@ from typing import Any
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
+from magpie_agent.llm import get_bound_llm
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.fox import store_fox_candidates
 from magpie_agent.tools.strategy import fetch_strategy_by_user
@@ -83,8 +83,7 @@ async def fox_node(state: MagpieState) -> dict[str, Any]:
 
 def get_fox_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Fox Finder LLM 초기화"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-    return llm.bind_tools([store_fox_candidates])
+    return get_bound_llm("fox", [store_fox_candidates])
 
 
 def route_after_fox(state: MagpieState) -> str:
