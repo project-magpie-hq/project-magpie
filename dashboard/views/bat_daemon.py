@@ -14,6 +14,7 @@ from bat_daemon.session_stats import build_session_stats_from_signal_history
 from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
 from db.entity import TargetEntity, WalletEntity
+from magpie_agent.tools.strategy import fetch_strategy_by_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
 
 
@@ -405,6 +406,36 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     st.session_state.backtest_strategy_user_id_value = strategy_user_id
     st.session_state.backtest_id_value = backtest_id
 
+    source_strategy = None
+    strategy_target_coins: list[str] = []
+    if strategy_user_id.strip():
+        try:
+            source_strategy = run_async_task(fetch_strategy_by_user(strategy_user_id.strip()))
+        except Exception as exc:
+            st.warning(f"원본 전략을 불러오지 못했습니다: {exc}")
+        else:
+            strategy_target_coins = list(source_strategy.get("target_coins") or []) if source_strategy else []
+
+    default_selected_coins = st.session_state.get(f"{namespace}_selected_target_coins")
+    if not default_selected_coins:
+        default_selected_coins = strategy_target_coins
+    default_selected_coins = [coin for coin in default_selected_coins if coin in strategy_target_coins]
+
+    selected_target_coins = st.multiselect(
+        "백테스트 대상 코인",
+        options=strategy_target_coins,
+        default=default_selected_coins,
+        key=f"{namespace}_selected_target_coins_widget",
+        help="원본 전략 target_coins 중 실제로 backtest monitoring target을 생성할 코인만 선택합니다.",
+        placeholder="원본 전략을 불러오면 선택 가능한 코인이 표시됩니다.",
+    )
+    st.session_state[f"{namespace}_selected_target_coins"] = selected_target_coins
+
+    if source_strategy is None:
+        st.caption("원본 전략 user_id를 입력하면 선택 가능한 target_coins를 불러옵니다.")
+    elif not strategy_target_coins:
+        st.warning("원본 전략에 target_coins가 없습니다.")
+
     col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1])
     start = col_c.text_input("시작 일시", value="2024-01-01 00:00:00", key=f"{namespace}_start")
     end = col_d.text_input("종료 일시", value="2024-02-01 00:00:00", key=f"{namespace}_end")
@@ -428,6 +459,8 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     if st.button("백테스트 실행", width="stretch", key=f"{namespace}_run_backtest"):
         with st.spinner("백테스트 전용 전략/지갑/타점을 준비하고 과거 캔들을 재생하는 중..."):
             try:
+                if strategy_target_coins and not selected_target_coins:
+                    raise ValueError("백테스트 대상 코인을 최소 1개 이상 선택하세요.")
                 st.session_state.bat_backtest_result = run_async_task(
                     collect_backtest_run(
                         strategy_user_id,
@@ -435,6 +468,7 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
                         start,
                         end,
                         float(initial_balance),
+                        selected_target_coins=selected_target_coins or None,
                         max_tick_rows=int(max_tick_rows),
                     )
                 )
@@ -463,6 +497,8 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
         f"원본 전략 user_id: `{result.get('strategy_user_id')}` / "
         f"백테스트 user_id: `{result.get('backtest_id') or result.get('wallet_user_id')}`"
     )
+    if result.get("selected_target_coins") is not None:
+        st.caption(f"선택된 target_coins: `{', '.join(result.get('selected_target_coins') or [])}`")
 
     render_wallet_snapshot(result.get("wallet"), "백테스트 후 DB 지갑 상태")
     render_session_stats(result.get("session_stats"), "백테스트 세션 통계")

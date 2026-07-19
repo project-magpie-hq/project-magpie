@@ -135,6 +135,7 @@ MongoDB DB 이름: `the_nest`
 `bat_daemon/backtest.py`는 현재 이렇게 동작합니다.
 
 - 원본 전략을 `backtest_id` 사용자로 복제
+- 필요 시 원본 전략 `target_coins` 중 일부만 선택해 복제
 - 백테스트 전용 지갑 초기화
 - 기존 백테스트용 `monitoring_targets` 삭제
 - 시작 시점에 `Target Refresh Graph`를 한 번 실행해 초기 타점 생성

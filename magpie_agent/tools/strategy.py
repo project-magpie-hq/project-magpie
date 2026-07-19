@@ -111,13 +111,33 @@ async def upsert_strategy_for_user(user_id: str, target_coins: list[str], strate
     return strategy_entity
 
 
-async def clone_strategy_to_user(source_user_id: str, target_user_id: str) -> StrategyEntity:
+async def clone_strategy_to_user(
+    source_user_id: str,
+    target_user_id: str,
+    target_coins_override: list[str] | None = None,
+) -> StrategyEntity:
     source_strategy = await fetch_strategy_by_user(source_user_id)
     if source_strategy is None:
         raise ValueError(f"원본 전략이 없습니다: {source_user_id}")
 
     strategy = StrategySchema.model_validate(source_strategy)
-    return await upsert_strategy_for_user(target_user_id, strategy.target_coins, strategy.strategy_details)
+    target_coins = strategy.target_coins
+
+    if target_coins_override is not None:
+        if not target_coins_override:
+            raise ValueError("백테스트용 target_coins는 최소 1개 이상 선택해야 합니다.")
+
+        invalid_coins = [coin for coin in target_coins_override if coin not in strategy.target_coins]
+        if invalid_coins:
+            raise ValueError(
+                "선택한 코인이 원본 전략 target_coins에 없습니다: " + ", ".join(invalid_coins)
+            )
+
+        # 중복 입력이 들어와도 원본 전략의 순서를 유지합니다.
+        target_coin_set = set(target_coins_override)
+        target_coins = [coin for coin in strategy.target_coins if coin in target_coin_set]
+
+    return await upsert_strategy_for_user(target_user_id, target_coins, strategy.strategy_details)
 
 
 @tool

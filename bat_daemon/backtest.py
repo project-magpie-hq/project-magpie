@@ -79,14 +79,20 @@ async def prepare_backtest_environment(
     backtest_id: str,
     start: str,
     initial_balance: float,
+    selected_target_coins: list[str] | None = None,
 ) -> None:
     backtest_time = _normalize_backtest_time(start)
 
     print("\n🧰 백테스트 전용 환경을 준비합니다...")
     await register_wallet(backtest_id, initial_balance)
-    await clone_strategy_to_user(strategy_user_id, backtest_id)
+    cloned_strategy = await clone_strategy_to_user(
+        strategy_user_id,
+        backtest_id,
+        target_coins_override=selected_target_coins,
+    )
     deleted_count = await clear_monitoring_targets_by_user(backtest_id)
     print(f"   🧹 기존 backtest monitoring target 삭제: {deleted_count}건")
+    print(f"   🎯 이번 백테스트 대상 코인: {cloned_strategy.target_coins}")
 
     refresh_graph = build_target_refresh_graph()
     await invoke_graph_for_target_refresh(
@@ -159,6 +165,7 @@ def build_backtest_result(
         "wallet_user_id": None,
         "strategy_user_id": None,
         "backtest_id": None,
+        "selected_target_coins": None,
         "generated_targets": None,
         "loaded_candles": {},
     }
@@ -170,10 +177,17 @@ async def collect_backtest_run(
     start: str,
     end: str,
     initial_balance: float,
+    selected_target_coins: list[str] | None = None,
     *,
     max_tick_rows: int | None = None,
 ) -> dict[str, Any]:
-    await prepare_backtest_environment(strategy_user_id, backtest_id, start, initial_balance)
+    await prepare_backtest_environment(
+        strategy_user_id,
+        backtest_id,
+        start,
+        initial_balance,
+        selected_target_coins=selected_target_coins,
+    )
 
     bat = BatDaemon(
         backtest_id,
@@ -234,6 +248,7 @@ async def collect_backtest_run(
         "wallet_user_id": backtest_id,
         "strategy_user_id": strategy_user_id,
         "backtest_id": backtest_id,
+        "selected_target_coins": sorted(backtest_universe),
         "generated_targets": await fetch_monitoring_targets_by_user(backtest_id),
     }
 
@@ -244,6 +259,7 @@ async def run_backtest(
     start: str,
     end: str,
     initial_balance: float,
+    selected_target_coins: list[str] | None = None,
 ) -> None:
     print("=" * 60)
     print("🧪 Project Magpie: Bat 백테스트 시작")
@@ -251,6 +267,8 @@ async def run_backtest(
     print(f"🧪 backtest_id: {backtest_id}")
     print(f"👛 initial_balance: {initial_balance:,.0f}")
     print(f"📅 기간: {start} ~ {end}")
+    if selected_target_coins is not None:
+        print(f"🎯 선택 코인: {', '.join(selected_target_coins)}")
     print("=" * 60)
     print("\n▶️ 과거 캔들 재생을 시작합니다.")
     print("   run.py와 동일한 체결 경로를 사용하며, 차이는 과거 tick 데이터를 재생한다는 점뿐입니다.\n")
@@ -261,6 +279,7 @@ async def run_backtest(
         start,
         end,
         initial_balance,
+        selected_target_coins,
     )
 
     if result.get("error"):
@@ -296,6 +315,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", required=True, help="시작 일시. 예: '2024-01-01 00:00:00'")
     parser.add_argument("--end", required=True, help="종료 일시. 예: '2024-02-01 00:00:00'")
     parser.add_argument("--initial-balance", type=float, default=100000000.0, help="백테스트 지갑 초기 KRW")
+    parser.add_argument(
+        "--target-coins",
+        nargs="+",
+        help="백테스트에 사용할 target_coins 일부 선택. 생략 시 원본 전략의 전체 target_coins 사용",
+    )
     return parser.parse_args()
 
 
@@ -307,6 +331,7 @@ async def main() -> None:
         args.start,
         args.end,
         args.initial_balance,
+        args.target_coins,
     )
 
 
