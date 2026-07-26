@@ -4,10 +4,10 @@ from typing import Any
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from magpie_agent.agents.meerkat_scanner.chart_compressor import generate_chart_context
 from magpie_agent.agents.utils import load_prompt, normalize_content
+from magpie_agent.llm import get_base_llm
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
 from magpie_agent.tools.strategy import fetch_strategy_by_user
@@ -139,4 +139,4 @@ def _extract_current_price(chart_data: str) -> float | None:
 
 def _get_meerkat_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Meerkat 차트 분석용 LLM (분석 텍스트 생성, 도구 미바인드)"""
-    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
+    return get_base_llm("meerkat")

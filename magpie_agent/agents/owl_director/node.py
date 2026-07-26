@@ -4,11 +4,11 @@ from typing import Any
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
+from magpie_agent.llm import get_bound_llm
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.router import transfer_to_agent
 from magpie_agent.tools.strategy import get_my_active_strategy, register_strategy_to_nest
@@ -56,14 +56,13 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
 def get_owl_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Owl 에이전트 모델 초기화"""
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
         tools = [
             register_strategy_to_nest,
             get_my_active_strategy,
             transfer_to_agent,
             get_wallet,
         ]
-        return llm.bind_tools(tools)
+        return get_bound_llm("owl", tools)
     except Exception as e:
         logger.exception("Owl LLM 초기화 실패")
         raise RuntimeError("Owl LLM 초기화 실패") from e

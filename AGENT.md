@@ -135,10 +135,12 @@ MongoDB DB 이름: `the_nest`
 `bat_daemon/backtest.py`는 현재 이렇게 동작합니다.
 
 - 원본 전략을 `backtest_id` 사용자로 복제
+- 필요 시 원본 전략 `target_coins` 중 일부만 선택해 복제
 - 백테스트 전용 지갑 초기화
 - 기존 백테스트용 `monitoring_targets` 삭제
 - 시작 시점에 `Target Refresh Graph`를 한 번 실행해 초기 타점 생성
-- 과거 1시간봉을 tick path로 재생
+- 과거 1분봉을 재생
+- 재생 모드는 기본 `open_only`이며 필요 시 `ohlc_path`로 바꿀 수 있음
 - 재생 중 refresh가 예약되면 완료까지 기다렸다가 이어서 진행
 
 즉, 가능하면 실시간 Daemon 체결 경로를 그대로 재사용하고, 입력 데이터만 과거 캔들로 바꿉니다.

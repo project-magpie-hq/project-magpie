@@ -13,10 +13,10 @@ import logging
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from magpie_agent.agents.calculate_team.schema import CalculateTeamState
 from magpie_agent.agents.utils import load_prompt, normalize_content
+from magpie_agent.llm import get_base_llm, get_bound_llm
 from magpie_agent.tools.monitor_target import register_monitoring_targets_to_nest
 from magpie_agent.tools.telegram import send_telegram_message
 
@@ -193,14 +193,13 @@ def _parse_dolphin_score(content: str) -> float | None:
 
 def _get_debate_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Bull/Bear 분석용 LLM (논쟁적 텍스트 생성, 도구 미바인드)"""
-    # 토론은 창의성이 약간 필요하므로 temperature=0.3
-    return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+    return get_base_llm("calculate_debate")
 
 
 def _get_dolphin_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Dolphin 최종판결용 LLM (정밀함 필요, 도구 강제 바인드)"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-    return llm.bind_tools(
+    return get_bound_llm(
+        "calculate_dolphin",
         [register_monitoring_targets_to_nest],
         tool_choice="any",
     )

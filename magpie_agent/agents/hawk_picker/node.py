@@ -4,11 +4,11 @@ from typing import Any, cast
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import Runnable
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
+from magpie_agent.llm import get_bound_llm
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.strategy import fetch_strategy_by_user, update_strategy_target_coins
 from magpie_agent.tools.telegram import send_telegram_message
@@ -115,8 +115,7 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
 
 def get_hawk_llm() -> Runnable[LanguageModelInput, AIMessage]:
     """Hawk 에이전트 모델 초기화"""
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.0)
-    return llm.bind_tools([update_strategy_target_coins])
+    return get_bound_llm("hawk", [update_strategy_target_coins])
 
 
 def route_after_hawk(state: MagpieState) -> str:
