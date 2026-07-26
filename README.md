@@ -71,8 +71,9 @@ Daemon의 현재 동작 기준은 아래와 같습니다.
 백테스트 전용 대시보드는 별도입니다.
 
 - 엔트리포인트: `uv run streamlit run dashboard/backtest.py`
-- 역할: 원본 전략을 `backtest_id`로 복제한 뒤 과거 tick 기반으로 실제 Daemon 체결 흐름을 재생
+- 역할: 원본 전략을 `backtest_id`로 복제한 뒤 과거 1분 tick 기반으로 실제 Daemon 체결 흐름을 재생
 - 옵션: 원본 전략의 `target_coins` 전체 대신 일부 코인만 선택해 백테스트용 타점을 생성할 수 있음
+- 옵션: 1분봉 재생 시 `open_only` 또는 `ohlc_path` 모드를 선택할 수 있음
 
 ## Graph Map
 
@@ -154,8 +155,9 @@ uv run python -m bat_daemon.backtest \
   --strategy-user-id test_developer_001 \
   --backtest-id backtest_001 \
   --target-coins KRW-BTC KRW-ETH \
-  --start "2024-01-01 00:00:00" \
-  --end "2024-02-01 00:00:00" \
+  --replay-mode open_only \
+  --start "2026-06-01 00:00:00" \
+  --end "2026-07-01 00:00:00" \
   --initial-balance 100000000
 ```
 

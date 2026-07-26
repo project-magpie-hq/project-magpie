@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from websockets.exceptions import ConnectionClosed
 
@@ -33,6 +33,7 @@ class BatDaemon:
         dry_run: bool = False,
         enable_graph: bool = True,
         backtest_mode: bool = False,
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.user_id = user_id
         self.wallet_user_id = wallet_user_id or user_id
@@ -50,6 +51,7 @@ class BatDaemon:
         self.current_event_time: str | None = None
         self.simulated_wallet: WalletEntity | None = None
         self.current_trigger_info: dict | None = None
+        self.event_callback = event_callback
 
     async def run(self) -> None:
         await asyncio.gather(self.sync_targets_from_db(), self.listen_upbit_ws())
@@ -134,6 +136,15 @@ class BatDaemon:
             return
 
         self.current_event_time = parsed_tick.candle_time
+        self._emit_event(
+            {
+                "event_type": "tick",
+                "coin": coin,
+                "event_time": parsed_tick.candle_time,
+                "price": parsed_tick.current_price,
+                "target_status": target.status.value if hasattr(target.status, "value") else str(target.status),
+            }
+        )
         await self._check_realtime_signals(parsed_tick, target)
 
         last_candle = self.current_candles.get(coin)
@@ -175,6 +186,9 @@ class BatDaemon:
     async def _evaluate_closed_candle(self, coin: str, closed_candle: dict[str, Any], target_entity: TargetEntity):
         """방금 마감된 온전한 1시간 캔들을 기반으로 유효성 및 CLOSE 조건을 판별"""
         if not should_check_close_buy(target_entity):
+            return
+
+        if closed_candle.get("candle_window_complete") is False:
             return
 
         parsed_candle = parse_closed_candle(closed_candle)
@@ -229,18 +243,18 @@ class BatDaemon:
     def _record_signal(
         self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
     ) -> None:
-        self.signal_history.append(
-            {
-                "target_coin": target.target_coin,
-                "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
-                "price": current_price,
-                "event_reason": event_reason,
-                "target_status": target.status.value if hasattr(target.status, "value") else target.status,
-                "event_time": self.current_event_time,
-                "buy_allocation_pct": getattr(target, "buy_allocation_pct", None),
-                "wallet_user_id": self.wallet_user_id,
-            }
-        )
+        signal_record = {
+            "target_coin": target.target_coin,
+            "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+            "price": current_price,
+            "event_reason": event_reason,
+            "target_status": target.status.value if hasattr(target.status, "value") else target.status,
+            "event_time": self.current_event_time,
+            "buy_allocation_pct": getattr(target, "buy_allocation_pct", None),
+            "wallet_user_id": self.wallet_user_id,
+        }
+        self.signal_history.append(signal_record)
+        self._emit_event({"event_type": "signal", **signal_record})
 
     async def _apply_dry_run_result(
         self, target: TargetEntity, signal_type: SignalType, current_price: float, event_reason: str
@@ -262,6 +276,20 @@ class BatDaemon:
         self.signal_history[-1]["executed_volume"] = volume
         if self.simulated_wallet is not None:
             self.signal_history[-1]["simulated_balance"] = self.simulated_wallet.balance
+        self._emit_event(
+            {
+                "event_type": "trade_executed",
+                "mode": "backtest",
+                "target_coin": target.target_coin,
+                "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+                "price": current_price,
+                "event_reason": event_reason,
+                "executed_volume": volume,
+                "result_status": simulated_status.value,
+                "event_time": self.current_event_time,
+                "wallet_balance": self.simulated_wallet.balance if self.simulated_wallet is not None else None,
+            }
+        )
         print(
             f"   🧪 [Backtest]: 직접 체결 반영 -> {target.target_coin} / {signal_type} / "
             f"{event_reason} / {current_price:,.0f}원 / 수량: {volume:.8f} / 상태: {simulated_status}"
@@ -323,6 +351,19 @@ class BatDaemon:
         await self._apply_post_trade_state(target, new_status)
         self.signal_history[-1]["result_status"] = new_status.value
         self.signal_history[-1]["executed_volume"] = volume
+        self._emit_event(
+            {
+                "event_type": "trade_executed",
+                "mode": "live",
+                "target_coin": target.target_coin,
+                "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+                "price": current_price,
+                "event_reason": event_reason,
+                "executed_volume": volume,
+                "result_status": new_status.value,
+                "event_time": self.current_event_time,
+            }
+        )
         print(
             f"   ✅ [Direct Execution]: {target.target_coin} {signal_type.value} 체결 완료 "
             f"(수량: {volume:.8f}) -> 상태: {new_status.value}"
@@ -342,8 +383,18 @@ class BatDaemon:
         #     print("   ⏭️ [Daemon->Trigger]: trigger_graph가 없어 Signal Trigger를 건너뜁니다.")
 
     async def _apply_post_trade_state(self, target: TargetEntity, new_status: TargetStatus) -> None:
+        previous_status = target.status
         target.status = new_status
         await self._update_target_status(target.target_coin, new_status)
+        self._emit_event(
+            {
+                "event_type": "target_status_changed",
+                "target_coin": target.target_coin,
+                "from_status": previous_status.value if hasattr(previous_status, "value") else str(previous_status),
+                "to_status": new_status.value,
+                "event_time": self.current_event_time,
+            }
+        )
 
         if new_status == TargetStatus.EXPIRED:
             self.active_targets.pop(target.target_coin, None)
@@ -382,6 +433,13 @@ class BatDaemon:
         expired_target_coins = [target.target_coin for target in expired_targets] if expired_targets else []
         if expired_target_coins:
             print(f"   ♻️ [Expired Targets]: 타점 재계산 대기 -> {expired_target_coins}")
+            self._emit_event(
+                {
+                    "event_type": "refresh_scheduled",
+                    "expired_target_coins": expired_target_coins,
+                    "event_time": self.current_event_time,
+                }
+            )
 
         self.refresh_task = asyncio.create_task(self._refresh_expired_targets())
         self.refresh_task.add_done_callback(self._on_refresh_task_done)
@@ -393,6 +451,13 @@ class BatDaemon:
 
         expired_coins = [t.target_coin for t in expired_targets]
         print(f"   ♻️ [Target Refresh]: {len(expired_coins)}개 EXPIRED 타점 재계산 시작 -> {expired_coins}")
+        self._emit_event(
+            {
+                "event_type": "refresh_started",
+                "expired_target_coins": expired_coins,
+                "event_time": self.current_event_time,
+            }
+        )
 
         await invoke_graph_for_target_refresh(
             self.refresh_graph,
@@ -403,11 +468,26 @@ class BatDaemon:
         )
         self.current_trigger_info = None
         await self.load_targets_from_db_once()
+        self._emit_event(
+            {
+                "event_type": "refresh_completed",
+                "expired_target_coins": expired_coins,
+                "active_targets": list(sorted(self.active_targets)),
+                "event_time": self.current_event_time,
+            }
+        )
 
     def _on_refresh_task_done(self, task: asyncio.Task) -> None:
         try:
             task.result()
         except Exception as exc:  # noqa: BLE001
+            self._emit_event(
+                {
+                    "event_type": "refresh_failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "event_time": self.current_event_time,
+                }
+            )
             print(f"   ❌ [Daemon->Refresh]: 타점 재계산 실패 ({type(exc).__name__}: {exc})")
 
     async def _update_target_status(self, target_coin: str, new_status: TargetStatus):
@@ -416,6 +496,12 @@ class BatDaemon:
             return
 
         await update_target_status(self.user_id, target_coin, new_status)
+
+    def _emit_event(self, event: dict[str, Any]) -> None:
+        if self.event_callback is None:
+            return
+
+        self.event_callback(event)
 
 
 async def main(user_id: str) -> None:

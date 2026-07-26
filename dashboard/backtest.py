@@ -31,7 +31,7 @@ def main() -> None:
 
     st.title("Magpie Backtest Dashboard", text_alignment="center")
     st.caption(
-        "원본 전략을 backtest_id로 복제해 과거 tick 기반으로 run.py와 동일한 체결 흐름을 재생합니다.",
+        "원본 전략을 backtest_id로 복제해 과거 1분 tick 기반으로 run.py와 동일한 체결 흐름을 재생합니다.",
         text_alignment="center",
     )
 

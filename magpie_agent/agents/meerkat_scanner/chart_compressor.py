@@ -1,11 +1,15 @@
 import asyncio
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pyupbit
 import talib
 
 logger = logging.getLogger(__name__)
+KST = ZoneInfo("Asia/Seoul")
+UTC = ZoneInfo("UTC")
 
 # 차트 분석 파라미터 상수
 DAY_CANDLE_COUNT = 120
@@ -17,14 +21,23 @@ RETRY_DELAY = 5.0
 API_CALL_DELAY = 0.5
 
 
+def _normalize_ohlcv_to_time(backtest_time: str | None) -> str | None:
+    if backtest_time is None:
+        return None
+
+    parsed = datetime.strptime(backtest_time, "%Y-%m-%dT%H:%M:%S")
+    return parsed.replace(tzinfo=KST).astimezone(UTC).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+
 async def _fetch_ohlcv_with_retry(
     coin: str, interval: str, count: int, backtest_time: str | None = None
 ) -> "pd.DataFrame | None":
     """pyupbit.get_ohlcv 호출을 재시도 로직과 함께 실행한다."""
+    normalized_to = _normalize_ohlcv_to_time(backtest_time)
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             df = await asyncio.to_thread(
-                pyupbit.get_ohlcv, coin, interval=interval, count=count, to=backtest_time
+                pyupbit.get_ohlcv, coin, interval=interval, count=count, to=normalized_to
             )
             if df is not None and not df.empty:
                 return df
