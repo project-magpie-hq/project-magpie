@@ -1,5 +1,7 @@
 import streamlit as st
 
+from dashboard.llm_usage import render_recent_llm_usage_runs
+
 from .backtest import render_backtest_daemon_panel
 from .live import render_bat_target_panel, render_daemon_controls, render_live_daemon_panel, render_wallet_control_panel
 
@@ -11,6 +13,8 @@ def render_bat_daemon_dashboard() -> None:
     render_daemon_controls("bat_daemon")
     render_bat_target_panel()
     render_live_daemon_panel("bat_daemon")
+    with st.expander("최근 Daemon LLM 비용 기록", expanded=False):
+        render_recent_llm_usage_runs(st.session_state.user_id, run_type=["daemon-refresh", "daemon-trigger"], limit=20)
 
 
 def render_backtest_dashboard() -> None:

@@ -7,7 +7,7 @@ from langchain_core.runnables import Runnable
 
 from magpie_agent.agents.meerkat_scanner.chart_compressor import generate_chart_context
 from magpie_agent.agents.utils import load_prompt, normalize_content
-from magpie_agent.llm import get_base_llm
+from magpie_agent.llm import get_base_llm, record_llm_usage
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.monitor_target import fetch_monitoring_targets_by_user
 from magpie_agent.tools.strategy import fetch_strategy_by_user
@@ -103,6 +103,7 @@ async def meerkat_node(state: MagpieState) -> dict[str, Any]:
             [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
         )
     )
+    record_llm_usage("meerkat", response)
 
     chart_context = str(response.content) if response.content else ""
 

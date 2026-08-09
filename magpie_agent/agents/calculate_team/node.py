@@ -16,7 +16,7 @@ from langchain_core.runnables import Runnable
 
 from magpie_agent.agents.calculate_team.schema import CalculateTeamState
 from magpie_agent.agents.utils import load_prompt, normalize_content
-from magpie_agent.llm import get_base_llm, get_bound_llm
+from magpie_agent.llm import get_base_llm, get_bound_llm, record_llm_usage
 from magpie_agent.tools.monitor_target import register_monitoring_targets_to_nest
 from magpie_agent.tools.telegram import send_telegram_message
 
@@ -81,6 +81,7 @@ async def _run_bull_or_bear(
         response: AIMessage = normalize_content(
             await llm.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
         )
+        record_llm_usage("calculate_debate", response)
     except Exception as e:
         logger.exception("%s LLM 호출 실패", role_name)
         raise RuntimeError(f"{role_name} 에이전트 실행 중 오류가 발생했습니다.") from e
@@ -121,6 +122,7 @@ async def dolphin_judge_node(state: CalculateTeamState) -> dict:
         response: AIMessage = normalize_content(
             await agent.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
         )
+        record_llm_usage("calculate_dolphin", response)
     except Exception as e:
         logger.exception("Dolphin LLM 호출 실패")
         raise RuntimeError("Dolphin 에이전트 실행 중 오류가 발생했습니다.") from e

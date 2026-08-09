@@ -1,5 +1,14 @@
 import datetime
 
+from magpie_agent.llm import (
+    diff_llm_usage_snapshots,
+    get_llm_usage_snapshot,
+    is_llm_usage_active,
+    reset_llm_usage,
+    restore_llm_usage,
+    save_llm_usage_run,
+)
+
 
 def build_target_refresh_thread_id(user_id: str) -> str:
     timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%S")
@@ -54,4 +63,43 @@ async def invoke_graph_for_target_refresh(
         prompt_message=prompt_message,
         trigger_info=trigger_info,
     )
-    await refresh_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    already_tracking = is_llm_usage_active()
+    usage_token = None if already_tracking else reset_llm_usage()
+    before_usage = get_llm_usage_snapshot()
+    run_type = "backtest-refresh" if backtest_time else "daemon-refresh"
+    try:
+        await refresh_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    except Exception as exc:
+        after_usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type=run_type,
+            graph_name="target_refresh",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=diff_llm_usage_snapshots(before_usage, after_usage) if already_tracking else after_usage,
+            status="failed",
+            metadata={
+                "target_coin": target_coin,
+                "backtest_time": backtest_time,
+                "trigger_info": trigger_info,
+            },
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    else:
+        after_usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type=run_type,
+            graph_name="target_refresh",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=diff_llm_usage_snapshots(before_usage, after_usage) if already_tracking else after_usage,
+            metadata={
+                "target_coin": target_coin,
+                "backtest_time": backtest_time,
+                "trigger_info": trigger_info,
+            },
+        )
+    finally:
+        if usage_token is not None:
+            restore_llm_usage(usage_token)

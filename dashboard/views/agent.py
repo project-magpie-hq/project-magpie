@@ -6,6 +6,8 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolCall, ToolMessa
 
 from dashboard.asyncio_utils import run_async_task
 from dashboard.common import pretty_json
+from dashboard.llm_usage import render_llm_usage_metrics, render_recent_llm_usage_runs
+from magpie_agent.llm import get_llm_usage_snapshot, reset_llm_usage, restore_llm_usage, save_llm_usage_run
 
 NODE_OWL_DIRECTOR = "owl_director"
 NODE_OWL_TOOLS = "owl_tools"
@@ -196,7 +198,7 @@ def message_preview(msg: Any) -> str:
     return f"{icon} **{msg_type}** — {preview}"
 
 
-async def astream_and_render(user_input: str, config: dict) -> tuple[list[dict], dict]:
+async def astream_and_render(user_input: str, config: dict) -> tuple[list[dict], dict, dict[str, Any]]:
     app = st.session_state.app
     inputs = {
         "messages": [("user", user_input)],
@@ -214,13 +216,44 @@ async def astream_and_render(user_input: str, config: dict) -> tuple[list[dict],
     accumulated_state.setdefault("messages", [])
     accumulated_state["messages"].append(HumanMessage(content=user_input))
 
-    async for event in app.astream(inputs, config=config, stream_mode="updates"):
-        collected.append(event)
-        for node_name, node_output in event.items():
-            update_accumulated_state(accumulated_state, node_output)
-            render_node_event(node_name, node_output)
+    thread_id = str(config.get("configurable", {}).get("thread_id") or "")
+    usage_token = reset_llm_usage()
+    try:
+        async for event in app.astream(inputs, config=config, stream_mode="updates"):
+            collected.append(event)
+            for node_name, node_output in event.items():
+                update_accumulated_state(accumulated_state, node_output)
+                render_node_event(node_name, node_output)
 
-    return collected, accumulated_state
+        usage = get_llm_usage_snapshot()
+        run_id = await save_llm_usage_run(
+            run_type="agent",
+            graph_name="common",
+            user_id=str(st.session_state.user_id),
+            thread_id=thread_id,
+            usage=usage,
+            metadata={"input": user_input, "surface": "dashboard"},
+        )
+        if run_id:
+            usage["run_id"] = run_id
+        return collected, accumulated_state, usage
+    except Exception as exc:
+        usage = get_llm_usage_snapshot()
+        run_id = await save_llm_usage_run(
+            run_type="agent",
+            graph_name="common",
+            user_id=str(st.session_state.user_id),
+            thread_id=thread_id,
+            usage=usage,
+            status="failed",
+            metadata={"input": user_input, "surface": "dashboard"},
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        if run_id:
+            usage["run_id"] = run_id
+        raise
+    finally:
+        restore_llm_usage(usage_token)
 
 
 def update_accumulated_state(accumulated_state: dict, node_output: dict) -> None:
@@ -241,6 +274,7 @@ def render_agent_history() -> None:
             for event in turn["events"]:
                 for node_name, node_output in event.items():
                     render_node_event(node_name, node_output)
+            render_llm_usage_metrics(turn.get("llm_usage"), "이 Turn의 LLM 사용량")
 
         if turn.get("final_response"):
             with st.chat_message("assistant"):
@@ -293,16 +327,19 @@ def render_agent_dashboard() -> None:
 
         events: list[dict] = []
         final_state: dict = {}
+        llm_usage: dict[str, Any] = {}
 
         with st.status("🤖 에이전트 실행 중...", expanded=True) as status:
             try:
-                events, final_state = run_async_task(astream_and_render(user_input, config))
+                events, final_state, llm_usage = run_async_task(astream_and_render(user_input, config))
                 status.update(label="✅ 실행 완료", state="complete", expanded=False)
             except Exception as exc:
                 st.exception(exc)
                 status.update(label="❌ 오류 발생", state="error")
 
         render_state(final_state)
+        if llm_usage:
+            render_llm_usage_metrics(llm_usage, "이번 Agent 실행 LLM 사용량")
         final_response = extract_final_owl_response(events)
 
         if final_response:
@@ -314,8 +351,12 @@ def render_agent_dashboard() -> None:
                 "user_input": user_input,
                 "events": events,
                 "final_response": final_response,
+                "llm_usage": llm_usage,
             }
         )
+
+    with st.expander("최근 Agent LLM 비용 기록", expanded=False):
+        render_recent_llm_usage_runs(st.session_state.user_id, run_type="agent", limit=20)
 
     st.chat_input(
         "Owl Director에게 메시지를 보내세요...",

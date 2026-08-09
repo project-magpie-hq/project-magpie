@@ -3,6 +3,14 @@ import json
 
 from bat_daemon.constant import SignalType
 from db.entity import TargetEntity
+from magpie_agent.llm import (
+    diff_llm_usage_snapshots,
+    get_llm_usage_snapshot,
+    is_llm_usage_active,
+    reset_llm_usage,
+    restore_llm_usage,
+    save_llm_usage_run,
+)
 
 
 def build_graph_thread_id(user_id: str, target_coin: str, signal_type: SignalType) -> str:
@@ -57,5 +65,45 @@ async def invoke_graph_for_trigger(
 
     thread_id = build_graph_thread_id(user_id, coin, signal_type)
     inputs = build_graph_inputs(user_id, target_entity, signal_type, current_price, event_reason)
-    await trigger_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    already_tracking = is_llm_usage_active()
+    usage_token = None if already_tracking else reset_llm_usage()
+    before_usage = get_llm_usage_snapshot()
+    try:
+        await trigger_graph.ainvoke(inputs, config={"configurable": {"thread_id": thread_id}})
+    except Exception as exc:
+        after_usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type="daemon-trigger",
+            graph_name="signal_trigger",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=diff_llm_usage_snapshots(before_usage, after_usage) if already_tracking else after_usage,
+            status="failed",
+            metadata={
+                "target_coin": coin,
+                "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+                "current_price": current_price,
+                "event_reason": event_reason,
+            },
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    else:
+        after_usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type="daemon-trigger",
+            graph_name="signal_trigger",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=diff_llm_usage_snapshots(before_usage, after_usage) if already_tracking else after_usage,
+            metadata={
+                "target_coin": coin,
+                "signal_type": signal_type.value if hasattr(signal_type, "value") else signal_type,
+                "current_price": current_price,
+                "event_reason": event_reason,
+            },
+        )
+    finally:
+        if usage_token is not None:
+            restore_llm_usage(usage_token)
     print(f"   ✅ [Daemon->Trigger]: {coin} Signal Trigger 그래프 처리 완료")

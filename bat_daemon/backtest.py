@@ -27,6 +27,7 @@ from bat_daemon.utils.backtest import (
     to_upbit_tick,
 )
 from magpie_agent.graphs.target_refresh import build_target_refresh_graph
+from magpie_agent.llm import get_llm_usage_snapshot, reset_llm_usage, restore_llm_usage, save_llm_usage_run
 from magpie_agent.tools.monitor_target import clear_monitoring_targets_by_user, fetch_monitoring_targets_by_user
 from magpie_agent.tools.strategy import clone_strategy_to_user
 from magpie_agent.tools.wallet import fetch_wallet_by_user, register_wallet
@@ -55,15 +56,20 @@ async def _load_historical_data(
             replay_start=replay_start,
         )
 
-        def on_batch(batch_count: int, oldest_candle_time: Any) -> None:
+        def on_batch(
+            batch_count: int,
+            oldest_candle_time: Any,
+            _coin: str = coin,
+            _estimated_total_batches: int = estimated_total_batches,
+        ) -> None:
             if batch_count == 1 or batch_count % 25 == 0:
                 emit_backtest_event(
                     progress_callback,
                     "historical_coin_progress",
-                    f"{coin} 과거 캔들 로드 중... ({batch_count}/{estimated_total_batches or '?'} batch)",
-                    coin=coin,
+                    f"{_coin} 과거 캔들 로드 중... ({batch_count}/{_estimated_total_batches or '?'} batch)",
+                    coin=_coin,
                     batch_count=batch_count,
-                    estimated_total_batches=estimated_total_batches,
+                    estimated_total_batches=_estimated_total_batches,
                     oldest_candle_time=str(oldest_candle_time),
                     candle_interval=BACKTEST_CANDLE_INTERVAL,
                 )
@@ -197,6 +203,78 @@ async def collect_backtest_run(
     initial_balance: float,
     selected_target_coins: list[str] | None = None,
     replay_mode: str = DEFAULT_BACKTEST_REPLAY_MODE,
+    benchmark_period: str | None = None,
+    *,
+    max_tick_rows: int | None = None,
+    progress_callback: BacktestProgressCallback | None = None,
+) -> dict[str, Any]:
+    usage_token = reset_llm_usage()
+    try:
+        result = await _collect_backtest_run_impl(
+            strategy_user_id,
+            backtest_id,
+            start,
+            end,
+            initial_balance,
+            selected_target_coins=selected_target_coins,
+            replay_mode=replay_mode,
+            benchmark_period=benchmark_period,
+            max_tick_rows=max_tick_rows,
+            progress_callback=progress_callback,
+        )
+        result["llm_usage"] = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type="backtest",
+            graph_name="backtest_session",
+            user_id=backtest_id,
+            thread_id=f"backtest:{backtest_id}:{start}:{end}",
+            usage=result["llm_usage"],
+            metadata={
+                "strategy_user_id": strategy_user_id,
+                "backtest_id": backtest_id,
+                "start": start,
+                "end": end,
+                "selected_target_coins": selected_target_coins,
+                "benchmark_period": benchmark_period,
+                "replay_mode": replay_mode,
+            },
+        )
+        return result
+    except Exception as exc:
+        usage = get_llm_usage_snapshot()
+        setattr(exc, "llm_usage", usage)
+        await save_llm_usage_run(
+            run_type="backtest",
+            graph_name="backtest_session",
+            user_id=backtest_id,
+            thread_id=f"backtest:{backtest_id}:{start}:{end}",
+            usage=usage,
+            status="failed",
+            metadata={
+                "strategy_user_id": strategy_user_id,
+                "backtest_id": backtest_id,
+                "start": start,
+                "end": end,
+                "selected_target_coins": selected_target_coins,
+                "benchmark_period": benchmark_period,
+                "replay_mode": replay_mode,
+            },
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise
+    finally:
+        restore_llm_usage(usage_token)
+
+
+async def _collect_backtest_run_impl(
+    strategy_user_id: str,
+    backtest_id: str,
+    start: str,
+    end: str,
+    initial_balance: float,
+    selected_target_coins: list[str] | None = None,
+    replay_mode: str = DEFAULT_BACKTEST_REPLAY_MODE,
+    benchmark_period: str | None = None,
     *,
     max_tick_rows: int | None = None,
     progress_callback: BacktestProgressCallback | None = None,
@@ -348,6 +426,7 @@ async def collect_backtest_run(
         "strategy_user_id": strategy_user_id,
         "backtest_id": backtest_id,
         "selected_target_coins": sorted(backtest_universe),
+        "benchmark_period": benchmark_period,
         "generated_targets": await fetch_monitoring_targets_by_user(backtest_id),
     }
 
@@ -393,6 +472,15 @@ async def run_backtest(
     print("\n🏁 백테스트 종료")
     print(f"   처리한 가상 틱: {result.get('processed_ticks', 0):,}개")
     print(f"   감지된 신호: {len(result.get('signals', [])):,}개")
+    llm_usage = result.get("llm_usage") or {}
+    if llm_usage:
+        print(
+            "   LLM 사용량: "
+            f"{llm_usage.get('total_calls', 0):,} calls / "
+            f"{llm_usage.get('input_tokens', 0):,} input tokens / "
+            f"{llm_usage.get('output_tokens', 0):,} output tokens / "
+            f"${llm_usage.get('estimated_cost_usd', 0.0):,.6f}"
+        )
 
     final_wallet = result.get("wallet")
     if final_wallet is not None:

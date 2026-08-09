@@ -8,7 +8,7 @@ from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
-from magpie_agent.llm import get_bound_llm
+from magpie_agent.llm import get_bound_llm, record_llm_usage
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.fox import store_fox_candidates
 from magpie_agent.tools.strategy import fetch_strategy_by_user
@@ -45,6 +45,7 @@ async def fox_node(state: MagpieState) -> dict[str, Any]:
     ]
     agent = get_fox_llm()
     response: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
+    record_llm_usage("fox", response)
 
     candidates: list[str] = []
     if response.tool_calls:

@@ -10,6 +10,7 @@ import streamlit as st
 
 from bat_daemon.utils.backtest import BACKTEST_CANDLE_INTERVAL, BACKTEST_REPLAY_MODES, DEFAULT_BACKTEST_REPLAY_MODE
 from dashboard.common import pretty_json
+from dashboard.llm_usage import render_llm_usage_metrics
 
 from .backtest_runtime import (
     drain_backtest_event_queue,
@@ -28,6 +29,13 @@ from .common import (
 
 PROCESS_RERUN_INTERVAL_SECONDS = 1.5
 REPORT_DIR = Path("reports/backtests")
+CUSTOM_BENCHMARK_LABEL = "직접 입력"
+BACKTEST_BENCHMARK_PERIODS: dict[str, tuple[str, str]] = {
+    "강력 상승장": ("2024-11-05 00:00:00", "2024-11-26 23:59:00"),
+    "급격 하락장": ("2025-10-06 00:00:00", "2025-10-27 23:59:00"),
+    "지루한 횡보장": ("2024-08-09 00:00:00", "2024-08-30 23:59:00"),
+    "고변동 급락장": ("2026-01-20 00:00:00", "2026-02-06 23:59:00"),
+}
 
 
 def _format_metric_price(value: Any) -> str:
@@ -264,12 +272,15 @@ def _write_backtest_report_files(
             "backtest_id": result.get("backtest_id"),
             "wallet_user_id": result.get("wallet_user_id"),
             "selected_target_coins": result.get("selected_target_coins"),
+            "benchmark_period": result.get("benchmark_period"),
             "processed_ticks": result.get("processed_ticks"),
             "visible_tick_rows": len(tick_rows),
             "signal_count": len(signals),
             "loaded_candles": result.get("loaded_candles"),
+            "llm_usage": result.get("llm_usage"),
         },
         "session_stats": _to_report_data(result.get("session_stats")),
+        "llm_usage": _to_report_data(result.get("llm_usage")),
         "wallet": _to_report_data(result.get("wallet")),
         "initial_targets": _to_report_data(result.get("initial_targets")),
         "final_targets": _to_report_data(result.get("final_targets")),
@@ -287,6 +298,7 @@ def _write_backtest_report_files(
 
     summary_html = escape(pretty_json(report_payload["summary"]))
     stats_html = escape(pretty_json(result.get("session_stats")))
+    llm_usage_html = escape(pretty_json(result.get("llm_usage")))
     signals_html = escape(pretty_json(signals))
     targets_html = escape(pretty_json(result.get("final_targets")))
     html = f"""<!doctype html>
@@ -316,6 +328,10 @@ def _write_backtest_report_files(
   <section>
     <h2>Session Stats</h2>
     <pre>{stats_html}</pre>
+  </section>
+  <section>
+    <h2>LLM Usage</h2>
+    <pre>{llm_usage_html}</pre>
   </section>
   <section>
     <h2>Signals</h2>
@@ -410,6 +426,7 @@ def render_backtest_flow_dashboard(namespace: str, result: dict[str, Any] | None
         render_backtest_report_save_controls(result, final_tick_rows, result.get("signals", []), namespace)
         st.divider()
         render_session_stats(result.get("session_stats"), "백테스트 결과")
+        render_llm_usage_metrics(result.get("llm_usage"))
 
         st.markdown("##### 발생 신호")
         render_signal_table(result.get("signals", []), result.get("final_targets", {}))
@@ -428,6 +445,8 @@ def render_backtest_flow_dashboard(namespace: str, result: dict[str, Any] | None
                 f"원본 전략 user_id: `{result.get('strategy_user_id')}` / "
                 f"백테스트 user_id: `{result.get('backtest_id') or result.get('wallet_user_id')}`"
             )
+            if result.get("benchmark_period"):
+                st.caption(f"벤치마크 기간: `{result.get('benchmark_period')}`")
             if result.get("selected_target_coins") is not None:
                 st.caption(f"선택된 target_coins: `{', '.join(result.get('selected_target_coins') or [])}`")
             st.markdown("###### 로드된 캔들 수")
@@ -491,6 +510,27 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     elif not strategy_target_coins:
         st.warning("원본 전략에 target_coins가 없습니다.")
 
+    benchmark_options = [CUSTOM_BENCHMARK_LABEL, *BACKTEST_BENCHMARK_PERIODS]
+    benchmark_label = st.selectbox(
+        "벤치마크 기간",
+        options=benchmark_options,
+        index=benchmark_options.index(st.session_state.get(f"{namespace}_benchmark_period", CUSTOM_BENCHMARK_LABEL))
+        if st.session_state.get(f"{namespace}_benchmark_period", CUSTOM_BENCHMARK_LABEL) in benchmark_options
+        else 0,
+        key=f"{namespace}_benchmark_period_widget",
+        help="시장 특성이 뚜렷한 기간을 빠르게 선택하거나, 직접 입력으로 원하는 기간을 지정합니다.",
+    )
+    st.session_state[f"{namespace}_benchmark_period"] = benchmark_label
+    if benchmark_label != CUSTOM_BENCHMARK_LABEL:
+        preset_start, preset_end = BACKTEST_BENCHMARK_PERIODS[benchmark_label]
+        if st.session_state.get(f"{namespace}_benchmark_period_applied") != benchmark_label:
+            st.session_state[f"{namespace}_start"] = preset_start
+            st.session_state[f"{namespace}_end"] = preset_end
+            st.session_state[f"{namespace}_benchmark_period_applied"] = benchmark_label
+        st.caption(f"`{benchmark_label}` 기간: `{preset_start}` ~ `{preset_end}`")
+    else:
+        st.session_state[f"{namespace}_benchmark_period_applied"] = CUSTOM_BENCHMARK_LABEL
+
     col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1.1])
     start = col_c.text_input("시작 일시", value="2026-06-01 00:00:00", key=f"{namespace}_start")
     end = col_d.text_input("종료 일시", value="2026-07-01 00:00:00", key=f"{namespace}_end")
@@ -528,6 +568,7 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
                 float(initial_balance),
                 selected_target_coins or None,
                 replay_mode=replay_mode,
+                benchmark_period=benchmark_label if benchmark_label != CUSTOM_BENCHMARK_LABEL else None,
             )
         except Exception as exc:
             st.session_state.bat_backtest_result = {"error": str(exc)}

@@ -112,6 +112,9 @@ MongoDB DB 이름: `the_nest`
 - `wallets`
   - KRW 잔고, 자산, `trade_history` 저장
   - Daemon 체결 결과도 여기에 반영됨
+- `llm_usage_runs`
+  - Agent, Daemon refresh/trigger, Backtest 실행 단위의 LLM token/cost 추정치를 저장
+  - `run_type`, `graph_name`, `thread_id`, `usage.by_agent`, `usage.by_model` 기준으로 조회
 
 ## State Fields Worth Remembering
 

@@ -8,7 +8,7 @@ from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
-from magpie_agent.llm import get_bound_llm
+from magpie_agent.llm import get_bound_llm, record_llm_usage
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.strategy import fetch_strategy_by_user, update_strategy_target_coins
 from magpie_agent.tools.telegram import send_telegram_message
@@ -78,6 +78,7 @@ async def hawk_node(state: MagpieState) -> dict[str, Any]:
     messages_to_llm = [SystemMessage(content=system_prompt), HumanMessage(content=user_input)]
     agent = get_hawk_llm()
     response_phase2: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
+    record_llm_usage("hawk", response_phase2)
 
     reasoning = cast(str, response_phase2.content or "").strip()
     target_coins: list[str] = []
