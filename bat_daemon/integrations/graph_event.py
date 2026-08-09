@@ -56,10 +56,7 @@ async def invoke_graph_for_trigger(
     trigger_graph는 build_signal_trigger_graph()로 생성된 CompiledStateGraph.
     """
     coin = target_entity.target_coin
-    print(
-        f"   🤝 [Daemon->Trigger]: {user_id} / {coin} / "
-        f"{signal_type} 체결 완료 → Signal Trigger 그래프 호출"
-    )
+    print(f"   🤝 [Daemon->Trigger]: {user_id} / {coin} / {signal_type} 체결 완료 → Signal Trigger 그래프 호출")
     if trigger_graph is None:
         raise RuntimeError("trigger_graph is not initialized")
 

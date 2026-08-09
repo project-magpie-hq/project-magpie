@@ -1,7 +1,7 @@
 import time
+from collections.abc import Callable
 from datetime import datetime
 from math import ceil
-from typing import Callable
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -79,7 +79,9 @@ def fetch_historical_candles_by_range(
     return result_df
 
 
-def estimate_historical_batches(start_date: str, end_date: str, *, interval: str = "minute1", batch_size: int = 200) -> int:
+def estimate_historical_batches(
+    start_date: str, end_date: str, *, interval: str = "minute1", batch_size: int = 200
+) -> int:
     start_dt = datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S")
     interval_step = _interval_step(interval)

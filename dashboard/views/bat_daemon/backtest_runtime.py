@@ -194,7 +194,7 @@ def start_backtest_worker(
             )
             result = build_backtest_result({}, {}, str(exc))
             if hasattr(exc, "llm_usage"):
-                result["llm_usage"] = getattr(exc, "llm_usage")
+                result["llm_usage"] = exc.llm_usage
         event_queue.put({"kind": "result", "result": result})
         event_queue.put({"kind": "done"})
 

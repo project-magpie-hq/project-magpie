@@ -242,7 +242,7 @@ async def collect_backtest_run(
         return result
     except Exception as exc:
         usage = get_llm_usage_snapshot()
-        setattr(exc, "llm_usage", usage)
+        exc.llm_usage = usage
         await save_llm_usage_run(
             run_type="backtest",
             graph_name="backtest_session",
