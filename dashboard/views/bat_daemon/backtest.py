@@ -10,6 +10,7 @@ import streamlit as st
 
 from bat_daemon.utils.backtest import BACKTEST_CANDLE_INTERVAL, BACKTEST_REPLAY_MODES, DEFAULT_BACKTEST_REPLAY_MODE
 from dashboard.common import pretty_json
+from dashboard.llm_usage import render_llm_usage_metrics
 
 from .backtest_runtime import (
     drain_backtest_event_queue,
@@ -28,6 +29,13 @@ from .common import (
 
 PROCESS_RERUN_INTERVAL_SECONDS = 1.5
 REPORT_DIR = Path("reports/backtests")
+CUSTOM_BENCHMARK_LABEL = "직접 입력"
+BACKTEST_BENCHMARK_PERIODS: dict[str, tuple[str, str]] = {
+    "강력 상승장": ("2024-11-05 00:00:00", "2024-11-26 23:59:00"),
+    "급격 하락장": ("2025-10-06 00:00:00", "2025-10-27 23:59:00"),
+    "지루한 횡보장": ("2024-08-09 00:00:00", "2024-08-30 23:59:00"),
+    "고변동 급락장": ("2026-01-20 00:00:00", "2026-02-06 23:59:00"),
+}
 
 
 def _format_metric_price(value: Any) -> str:
@@ -242,6 +250,267 @@ def _to_report_data(value: Any) -> Any:
     return value
 
 
+def _format_report_number(value: Any, digits: int = 0) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "-"
+    return f"{number:,.{digits}f}"
+
+
+def _format_report_cost(value: Any) -> str:
+    try:
+        return f"${float(value):,.6f}"
+    except (TypeError, ValueError):
+        return "$0.000000"
+
+
+def _html_cell(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, float):
+        return _format_report_number(value, 6).rstrip("0").rstrip(".")
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, list):
+        return ", ".join(escape(str(item)) for item in value) or "-"
+    if isinstance(value, dict):
+        return escape(pretty_json(value))
+    return escape(str(value))
+
+
+def _metric_card(label: str, value: Any, accent: str = "#0f172a") -> str:
+    return (
+        '<div class="metric-card">'
+        f'<div class="metric-label">{escape(label)}</div>'
+        f'<div class="metric-value" style="color:{accent}">{_html_cell(value)}</div>'
+        "</div>"
+    )
+
+
+def _html_table(rows: list[dict[str, Any]], columns: list[tuple[str, str]], empty_text: str) -> str:
+    if not rows:
+        return f'<p class="muted">{escape(empty_text)}</p>'
+
+    header = "".join(f"<th>{escape(label)}</th>" for _, label in columns)
+    body_rows = []
+    for row in rows:
+        cells = "".join(f"<td>{_html_cell(row.get(key))}</td>" for key, _ in columns)
+        body_rows.append(f"<tr>{cells}</tr>")
+    return f'<div class="table-wrap"><table><thead><tr>{header}</tr></thead><tbody>{"".join(body_rows)}</tbody></table></div>'
+
+
+def _session_stats_to_html(session_stats: Any) -> str:
+    stats = _to_report_data(session_stats) or {}
+    cards = [
+        _metric_card("Session Buy", stats.get("buy_count", 0), "#16a34a"),
+        _metric_card("Session Sell", stats.get("sell_count", 0), "#dc2626"),
+        _metric_card("Buy KRW", _format_report_number(stats.get("total_buy_krw", 0)), "#2563eb"),
+        _metric_card("Sell KRW", _format_report_number(stats.get("total_sell_krw", 0)), "#f97316"),
+    ]
+    return f'<div class="metric-grid">{"".join(cards)}</div>'
+
+
+def _llm_usage_to_html(usage: dict[str, Any] | None) -> str:
+    usage = usage or {}
+    cards = [
+        _metric_card("LLM Calls", usage.get("total_calls", 0), "#0f172a"),
+        _metric_card("Input Tokens", _format_report_number(usage.get("input_tokens", 0)), "#2563eb"),
+        _metric_card("Output Tokens", _format_report_number(usage.get("output_tokens", 0)), "#7c3aed"),
+        _metric_card("Total Tokens", _format_report_number(usage.get("total_tokens", 0)), "#0f766e"),
+        _metric_card("Est. Cost", _format_report_cost(usage.get("estimated_cost_usd", 0.0)), "#ea580c"),
+    ]
+    by_agent_rows = [{"agent": key, **value} for key, value in sorted((usage.get("by_agent") or {}).items())]
+    by_model_rows = [{"model": key, **value} for key, value in sorted((usage.get("by_model") or {}).items())]
+    usage_columns = [
+        ("calls", "Calls"),
+        ("input_tokens", "Input"),
+        ("output_tokens", "Output"),
+        ("total_tokens", "Total"),
+        ("estimated_cost_usd", "Est. Cost USD"),
+    ]
+    agent_table = _html_table(by_agent_rows, [("agent", "Agent"), *usage_columns], "Agent별 사용량이 없습니다.")
+    model_table = _html_table(by_model_rows, [("model", "Model"), *usage_columns], "Model별 사용량이 없습니다.")
+    return (
+        f'<div class="metric-grid five">{"".join(cards)}</div>'
+        '<div class="split">'
+        f'<div><h3>Agent별</h3>{agent_table}</div>'
+        f'<div><h3>Model별</h3>{model_table}</div>'
+        "</div>"
+        f'<p class="muted">{escape(str(usage.get("pricing_note") or "비용은 설정된 단가 기반의 추정치입니다."))}</p>'
+    )
+
+
+def _wallet_to_html(wallet: Any) -> str:
+    wallet_data = _to_report_data(wallet) or {}
+    assets = wallet_data.get("assets") or {}
+    trade_history = wallet_data.get("trade_history") or []
+    active_assets = [
+        {"coin": coin, **asset}
+        for coin, asset in sorted(assets.items())
+        if isinstance(asset, dict) and float(asset.get("volume") or 0) > 0
+    ]
+    buy_count = sum(1 for trade in trade_history if str(trade.get("signal")) == "BUY")
+    sell_count = sum(1 for trade in trade_history if str(trade.get("signal")) == "SELL")
+    cards = [
+        _metric_card("KRW Balance", _format_report_number(wallet_data.get("balance", 0)), "#0f172a"),
+        _metric_card("Assets", len(active_assets), "#2563eb"),
+        _metric_card("Buy Count", buy_count, "#16a34a"),
+        _metric_card("Sell Count", sell_count, "#dc2626"),
+    ]
+    asset_table = _html_table(
+        active_assets,
+        [("coin", "Coin"), ("volume", "Volume"), ("avg_buy_price", "Avg Buy Price")],
+        "보유 중인 코인 자산이 없습니다.",
+    )
+    trade_table = _html_table(
+        trade_history[-30:],
+        [
+            ("executed_at", "Executed At"),
+            ("market", "Market"),
+            ("signal", "Signal"),
+            ("price", "Price"),
+            ("volume", "Volume"),
+            ("total_price", "Total Price"),
+        ],
+        "체결 이력이 없습니다.",
+    )
+    return (
+        f'<div class="metric-grid">{"".join(cards)}</div>'
+        "<h3>보유 자산</h3>"
+        f"{asset_table}"
+        "<h3>최근 체결 이력</h3>"
+        f"{trade_table}"
+    )
+
+
+def _targets_to_rows(targets: Any) -> list[dict[str, Any]]:
+    target_data = _to_report_data(targets) or {}
+    if isinstance(target_data, dict):
+        iterable = target_data.items()
+    elif isinstance(target_data, list):
+        iterable = [(item.get("target_coin", idx) if isinstance(item, dict) else idx, item) for idx, item in enumerate(target_data)]
+    else:
+        return []
+
+    rows = []
+    for coin, target in iterable:
+        if not isinstance(target, dict):
+            continue
+        rows.append(
+            {
+                "coin": target.get("target_coin") or coin,
+                "status": target.get("status"),
+                "trigger": target.get("trigger_basis"),
+                "buy_lower": target.get("buy_price_lower_limit"),
+                "buy_upper": target.get("buy_price_upper_limit"),
+                "take_profit": target.get("take_profit_price"),
+                "stop_loss": target.get("stop_loss_price"),
+                "allocation": target.get("buy_allocation_pct"),
+                "reason": target.get("reason"),
+            }
+        )
+    return rows
+
+
+def _signals_to_html(signals: list[dict[str, Any]]) -> str:
+    return _html_table(
+        signals,
+        [
+            ("event_time", "Event Time"),
+            ("target_coin", "Coin"),
+            ("signal_type", "Signal"),
+            ("price", "Price"),
+            ("event_reason", "Reason"),
+            ("result_status", "Result"),
+            ("executed_volume", "Volume"),
+        ],
+        "발생 신호가 없습니다.",
+    )
+
+
+def _backtest_report_body_html(report_payload: dict[str, Any], chart_html: str) -> str:
+    summary = report_payload["summary"]
+    loaded_candle_rows = [
+        {"coin": coin, "candles": count}
+        for coin, count in sorted((summary.get("loaded_candles") or {}).items())
+    ]
+    target_columns = [
+        ("coin", "Coin"),
+        ("status", "Status"),
+        ("trigger", "Trigger"),
+        ("buy_lower", "Buy Lower"),
+        ("buy_upper", "Buy Upper"),
+        ("take_profit", "Take Profit"),
+        ("stop_loss", "Stop Loss"),
+        ("allocation", "Allocation"),
+        ("reason", "Reason"),
+    ]
+    raw_json_html = escape(pretty_json(report_payload))
+
+    summary_cards = [
+        _metric_card("Processed Ticks", _format_report_number(summary.get("processed_ticks", 0)), "#0f172a"),
+        _metric_card("Visible Tick Rows", _format_report_number(summary.get("visible_tick_rows", 0)), "#2563eb"),
+        _metric_card("Signal Count", summary.get("signal_count", 0), "#ea580c"),
+        _metric_card("Benchmark", summary.get("benchmark_period") or "직접 입력", "#0f766e"),
+    ]
+
+    return f"""
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Magpie Backtest Report</p>
+      <h1>{escape(str(summary.get("backtest_id") or "-"))}</h1>
+      <p class="muted">Saved at {escape(str(report_payload.get("saved_at")))} / selected coin {escape(str(report_payload.get("selected_coin") or "-"))}</p>
+    </div>
+    <div class="hero-meta">
+      <span>Strategy: {escape(str(summary.get("strategy_user_id") or "-"))}</span>
+      <span>Wallet: {escape(str(summary.get("wallet_user_id") or "-"))}</span>
+      <span>Targets: {escape(", ".join(summary.get("selected_target_coins") or []) or "-")}</span>
+    </div>
+  </section>
+  <section>
+    <h2>Tick / Signal Plot</h2>
+    {chart_html}
+  </section>
+  <section>
+    <h2>백테스트 결과</h2>
+    <div class="metric-grid">{"".join(summary_cards)}</div>
+    <h3>로드된 캔들 수</h3>
+    {_html_table(loaded_candle_rows, [("coin", "Coin"), ("candles", "Candles")], "로드된 캔들 정보가 없습니다.")}
+  </section>
+  <section>
+    <h2>세션 통계</h2>
+    {_session_stats_to_html(report_payload.get("session_stats"))}
+  </section>
+  <section>
+    <h2>LLM 사용량 / 예상 비용</h2>
+    {_llm_usage_to_html(report_payload.get("llm_usage"))}
+  </section>
+  <section>
+    <h2>발생 신호</h2>
+    {_signals_to_html(report_payload.get("signals") or [])}
+  </section>
+  <section>
+    <h2>백테스트 후 지갑 상태</h2>
+    {_wallet_to_html(report_payload.get("wallet"))}
+  </section>
+  <section>
+    <h2>초기 Target 상태</h2>
+    {_html_table(_targets_to_rows(report_payload.get("initial_targets")), target_columns, "초기 target 정보가 없습니다.")}
+  </section>
+  <section>
+    <h2>최종 Target 상태</h2>
+    {_html_table(_targets_to_rows(report_payload.get("final_targets")), target_columns, "최종 target 정보가 없습니다.")}
+  </section>
+  <section>
+    <details>
+      <summary>Raw Report JSON</summary>
+      <pre>{raw_json_html}</pre>
+    </details>
+  </section>
+"""
+
+
 def _write_backtest_report_files(
     result: dict[str, Any],
     tick_rows: list[dict[str, Any]],
@@ -264,12 +533,15 @@ def _write_backtest_report_files(
             "backtest_id": result.get("backtest_id"),
             "wallet_user_id": result.get("wallet_user_id"),
             "selected_target_coins": result.get("selected_target_coins"),
+            "benchmark_period": result.get("benchmark_period"),
             "processed_ticks": result.get("processed_ticks"),
             "visible_tick_rows": len(tick_rows),
             "signal_count": len(signals),
             "loaded_candles": result.get("loaded_candles"),
+            "llm_usage": result.get("llm_usage"),
         },
         "session_stats": _to_report_data(result.get("session_stats")),
+        "llm_usage": _to_report_data(result.get("llm_usage")),
         "wallet": _to_report_data(result.get("wallet")),
         "initial_targets": _to_report_data(result.get("initial_targets")),
         "final_targets": _to_report_data(result.get("final_targets")),
@@ -285,10 +557,7 @@ def _write_backtest_report_files(
         if chart is not None:
             chart_html = chart.to_html(full_html=False, include_plotlyjs="cdn", config={"displaylogo": False})
 
-    summary_html = escape(pretty_json(report_payload["summary"]))
-    stats_html = escape(pretty_json(result.get("session_stats")))
-    signals_html = escape(pretty_json(signals))
-    targets_html = escape(pretty_json(result.get("final_targets")))
+    body_html = _backtest_report_body_html(report_payload, chart_html)
     html = f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -296,35 +565,79 @@ def _write_backtest_report_files(
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Magpie Backtest Report - {escape(backtest_id)}</title>
   <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #111827; }}
-    h1, h2 {{ margin-bottom: 8px; }}
-    section {{ margin-top: 28px; }}
-    pre {{ background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; overflow: auto; }}
+    :root {{
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #e5e7eb;
+      --panel: #ffffff;
+      --soft: #f8fafc;
+      --wash: #eef6ff;
+      --accent: #0f766e;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 34rem),
+        linear-gradient(135deg, #f8fafc 0%, #eef6ff 52%, #fff7ed 100%);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{ max-width: 1280px; margin: 0 auto; padding: 36px 28px 56px; }}
+    h1 {{ margin: 0; font-size: clamp(2rem, 4vw, 3.5rem); letter-spacing: -0.05em; }}
+    h2 {{ margin: 0 0 18px; font-size: 1.35rem; letter-spacing: -0.02em; }}
+    h3 {{ margin: 20px 0 10px; color: #334155; font-size: 1rem; }}
+    section {{
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(10px);
+    }}
+    .hero {{
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(15, 23, 42, 0.94));
+      color: white;
+    }}
+    .hero .muted {{ color: rgba(255, 255, 255, 0.76); }}
+    .eyebrow {{ margin: 0 0 6px; color: #99f6e4; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }}
+    .hero-meta {{ display: flex; flex-direction: column; gap: 8px; min-width: min(360px, 100%); }}
+    .hero-meta span {{ padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; background: rgba(255, 255, 255, 0.1); }}
+    .muted {{ color: var(--muted); }}
+    .metric-grid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }}
+    .metric-grid.five {{ grid-template-columns: repeat(5, minmax(0, 1fr)); }}
+    .metric-card {{ padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }}
+    .metric-label {{ color: var(--muted); font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }}
+    .metric-value {{ margin-top: 8px; font-size: 1.45rem; font-weight: 850; letter-spacing: -0.03em; }}
+    .split {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }}
+    .table-wrap {{ width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }}
+    table {{ width: 100%; border-collapse: collapse; min-width: 760px; background: white; }}
+    th, td {{ padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
+    th {{ position: sticky; top: 0; background: #f1f5f9; color: #475569; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }}
+    tr:last-child td {{ border-bottom: 0; }}
+    td {{ font-size: 0.9rem; }}
+    pre {{ background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px; overflow: auto; }}
+    details summary {{ cursor: pointer; color: var(--accent); font-weight: 800; }}
+    @media (max-width: 900px) {{
+      main {{ padding: 20px 14px 40px; }}
+      .hero, .split {{ grid-template-columns: 1fr; display: grid; }}
+      .metric-grid, .metric-grid.five {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 560px) {{
+      .metric-grid, .metric-grid.five {{ grid-template-columns: 1fr; }}
+      section {{ padding: 18px; border-radius: 18px; }}
+    }}
   </style>
 </head>
 <body>
-  <h1>Magpie Backtest Report</h1>
-  <p>Saved at {escape(timestamp)} / selected coin {escape(selected_coin or "-")}</p>
-  <section>
-    <h2>Tick / Signal Plot</h2>
-    {chart_html}
-  </section>
-  <section>
-    <h2>Summary</h2>
-    <pre>{summary_html}</pre>
-  </section>
-  <section>
-    <h2>Session Stats</h2>
-    <pre>{stats_html}</pre>
-  </section>
-  <section>
-    <h2>Signals</h2>
-    <pre>{signals_html}</pre>
-  </section>
-  <section>
-    <h2>Final Targets</h2>
-    <pre>{targets_html}</pre>
-  </section>
+<main>
+{body_html}
+</main>
 </body>
 </html>
 """
@@ -410,6 +723,7 @@ def render_backtest_flow_dashboard(namespace: str, result: dict[str, Any] | None
         render_backtest_report_save_controls(result, final_tick_rows, result.get("signals", []), namespace)
         st.divider()
         render_session_stats(result.get("session_stats"), "백테스트 결과")
+        render_llm_usage_metrics(result.get("llm_usage"))
 
         st.markdown("##### 발생 신호")
         render_signal_table(result.get("signals", []), result.get("final_targets", {}))
@@ -428,6 +742,8 @@ def render_backtest_flow_dashboard(namespace: str, result: dict[str, Any] | None
                 f"원본 전략 user_id: `{result.get('strategy_user_id')}` / "
                 f"백테스트 user_id: `{result.get('backtest_id') or result.get('wallet_user_id')}`"
             )
+            if result.get("benchmark_period"):
+                st.caption(f"벤치마크 기간: `{result.get('benchmark_period')}`")
             if result.get("selected_target_coins") is not None:
                 st.caption(f"선택된 target_coins: `{', '.join(result.get('selected_target_coins') or [])}`")
             st.markdown("###### 로드된 캔들 수")
@@ -491,6 +807,27 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
     elif not strategy_target_coins:
         st.warning("원본 전략에 target_coins가 없습니다.")
 
+    benchmark_options = [CUSTOM_BENCHMARK_LABEL, *BACKTEST_BENCHMARK_PERIODS]
+    benchmark_label = st.selectbox(
+        "벤치마크 기간",
+        options=benchmark_options,
+        index=benchmark_options.index(st.session_state.get(f"{namespace}_benchmark_period", CUSTOM_BENCHMARK_LABEL))
+        if st.session_state.get(f"{namespace}_benchmark_period", CUSTOM_BENCHMARK_LABEL) in benchmark_options
+        else 0,
+        key=f"{namespace}_benchmark_period_widget",
+        help="시장 특성이 뚜렷한 기간을 빠르게 선택하거나, 직접 입력으로 원하는 기간을 지정합니다.",
+    )
+    st.session_state[f"{namespace}_benchmark_period"] = benchmark_label
+    if benchmark_label != CUSTOM_BENCHMARK_LABEL:
+        preset_start, preset_end = BACKTEST_BENCHMARK_PERIODS[benchmark_label]
+        if st.session_state.get(f"{namespace}_benchmark_period_applied") != benchmark_label:
+            st.session_state[f"{namespace}_start"] = preset_start
+            st.session_state[f"{namespace}_end"] = preset_end
+            st.session_state[f"{namespace}_benchmark_period_applied"] = benchmark_label
+        st.caption(f"`{benchmark_label}` 기간: `{preset_start}` ~ `{preset_end}`")
+    else:
+        st.session_state[f"{namespace}_benchmark_period_applied"] = CUSTOM_BENCHMARK_LABEL
+
     col_c, col_d, col_e, col_f = st.columns([1, 1, 1, 1.1])
     start = col_c.text_input("시작 일시", value="2026-06-01 00:00:00", key=f"{namespace}_start")
     end = col_d.text_input("종료 일시", value="2026-07-01 00:00:00", key=f"{namespace}_end")
@@ -528,6 +865,7 @@ def render_backtest_daemon_panel(namespace: str = "backtest") -> None:
                 float(initial_balance),
                 selected_target_coins or None,
                 replay_mode=replay_mode,
+                benchmark_period=benchmark_label if benchmark_label != CUSTOM_BENCHMARK_LABEL else None,
             )
         except Exception as exc:
             st.session_state.bat_backtest_result = {"error": str(exc)}

@@ -160,6 +160,7 @@ def start_backtest_worker(
     initial_balance: float,
     selected_target_coins: list[str] | None,
     replay_mode: str = DEFAULT_BACKTEST_REPLAY_MODE,
+    benchmark_period: str | None = None,
 ) -> None:
     event_queue: Queue[dict[str, Any]] = Queue()
 
@@ -177,6 +178,7 @@ def start_backtest_worker(
                     float(initial_balance),
                     selected_target_coins=selected_target_coins,
                     replay_mode=replay_mode,
+                    benchmark_period=benchmark_period,
                     max_tick_rows=DEFAULT_REPORT_TICK_ROWS,
                     progress_callback=progress_callback,
                 )
@@ -191,6 +193,8 @@ def start_backtest_worker(
                 }
             )
             result = build_backtest_result({}, {}, str(exc))
+            if hasattr(exc, "llm_usage"):
+                result["llm_usage"] = exc.llm_usage
         event_queue.put({"kind": "result", "result": result})
         event_queue.put({"kind": "done"})
 

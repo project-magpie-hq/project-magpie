@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Callable
+from typing import Any
 
 import pandas as pd
 
@@ -169,8 +170,19 @@ def build_backtest_result(initial_targets: dict[str, Any], final_targets: dict[s
         "strategy_user_id": None,
         "backtest_id": None,
         "selected_target_coins": None,
+        "benchmark_period": None,
         "generated_targets": None,
         "loaded_candles": {},
+        "llm_usage": {
+            "total_calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "by_model": {},
+            "by_agent": {},
+            "pricing_note": "No LLM usage was captured for this result.",
+        },
     }
 
 

@@ -34,3 +34,7 @@ def get_strategies_collection() -> AsyncIOMotorCollection:
 
 def get_wallets_collection() -> AsyncIOMotorCollection:
     return get_database()["wallets"]
+
+
+def get_llm_usage_runs_collection() -> AsyncIOMotorCollection:
+    return get_database()["llm_usage_runs"]

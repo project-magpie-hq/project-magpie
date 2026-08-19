@@ -94,6 +94,7 @@ MongoDB 데이터베이스 이름은 `the_nest`입니다.
 - `strategies`: Owl이 저장하고 Hawk가 `target_coins`를 갱신합니다.
 - `monitoring_targets`: Calculate Team이 최종 타점과 `buy_allocation_pct`를 저장합니다.
 - `wallets`: 원화 잔고, 코인 자산, `trade_history`를 저장합니다.
+- `llm_usage_runs`: Agent, Daemon refresh/trigger, Backtest 실행 단위의 LLM 토큰 사용량과 예상 비용을 저장합니다.
 
 ## Local Setup
 
@@ -127,6 +128,30 @@ docker-compose down
 
 - `MONGO_URL`
 - `TELEGRAM_BOT_TOKEN`
+
+MongoDB는 반드시 인증 정보를 포함한 URL을 사용하세요.
+
+```bash
+MONGO_ROOT_USERNAME=magpie_admin
+MONGO_ROOT_PASSWORD=<long-random-password>
+MONGO_URL=mongodb://magpie_admin:<long-random-password>@localhost:27017/the_nest?authSource=admin
+```
+
+`docker-compose.yml`은 MongoDB와 Redis를 `127.0.0.1`에만 publish합니다. 서버에서 실행한다면 클라우드 보안 그룹/방화벽에서도 `27017`, `6379` 외부 인바운드를 닫아두세요.
+
+이미 인증 없이 노출된 MongoDB가 랜섬 노트로 덮인 경우:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+기존 volume에 root 계정이 만들어진 적이 없다면 MongoDB 인증 활성화 후 접속이 막힐 수 있습니다. 복구할 백업이 없다면 감염된 개발용 volume을 삭제하고 새로 시작하세요.
+
+```bash
+docker compose down -v
+docker compose up -d
+```
 
 ## Run Commands
 

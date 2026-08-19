@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 from magpie_agent.graph import build_graph
+from magpie_agent.llm import get_llm_usage_snapshot, reset_llm_usage, restore_llm_usage, save_llm_usage_run
 
 # 로깅 설정
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -49,6 +50,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "from_daemon": False,
     }
 
+    usage_token = reset_llm_usage()
     try:
         # 그래프 실행 (업데이트 스트림 모드)
         async for event in app.astream(user_input, config=config, stream_mode="updates"):
@@ -80,9 +82,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "🐂🐻🐬 [Calculate Team]: Bull/Bear 토론 및 Dolphin 최종 타점 계산을 완료했습니다."
                 )
 
+        usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type="agent",
+            graph_name="common",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=usage,
+            metadata={"input": telegram_input},
+        )
+        logger.info(
+            "LLM usage saved: user_id=%s thread_id=%s calls=%s cost=$%.6f",
+            user_id,
+            thread_id,
+            usage.get("total_calls", 0),
+            usage.get("estimated_cost_usd", 0.0),
+        )
+
     except Exception as e:
         logger.exception("메시지 처리 중 오류 발생")
+        usage = get_llm_usage_snapshot()
+        await save_llm_usage_run(
+            run_type="agent",
+            graph_name="common",
+            user_id=user_id,
+            thread_id=thread_id,
+            usage=usage,
+            status="failed",
+            metadata={"input": telegram_input},
+            error=f"{type(e).__name__}: {e}",
+        )
         await update.message.reply_text(f"❌ [Error]: {e}")
+    finally:
+        restore_llm_usage(usage_token)
 
 
 def main():

@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from websockets.exceptions import ConnectionClosed
 
@@ -472,7 +473,7 @@ class BatDaemon:
             {
                 "event_type": "refresh_completed",
                 "expired_target_coins": expired_coins,
-                "active_targets": list(sorted(self.active_targets)),
+                "active_targets": sorted(self.active_targets),
                 "event_time": self.current_event_time,
             }
         )

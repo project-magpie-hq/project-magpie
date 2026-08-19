@@ -8,7 +8,7 @@ from langgraph.graph import END
 
 from magpie_agent.agents.constant import NodeNames
 from magpie_agent.agents.utils import load_prompt, normalize_content
-from magpie_agent.llm import get_bound_llm
+from magpie_agent.llm import get_bound_llm, record_llm_usage
 from magpie_agent.state.magpie import MagpieState
 from magpie_agent.tools.router import transfer_to_agent
 from magpie_agent.tools.strategy import get_my_active_strategy, register_strategy_to_nest
@@ -36,6 +36,7 @@ async def owl_node(state: MagpieState) -> dict[str, Any]:
     try:
         agent = get_owl_llm()
         response: AIMessage = normalize_content(await agent.ainvoke(messages_to_llm))
+        record_llm_usage("owl", response)
 
         if not response.content and not response.tool_calls:
             logger.warning("OWL LLM이 빈 응답을 반환했습니다. 재시도나 확인이 필요합니다.")
